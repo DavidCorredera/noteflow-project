@@ -15,3 +15,8 @@ La arquitectura se divide en dos hilos principales que se comunican a través de
 ### 4. Sistemas de diseño
 Para NoteFlow hemos elegido **React Native Paper** sobre Gluestack UI. 
 *   **Justificación:** Paper ofrece una implementación madura de Material Design que nos permite iterar el MVP muy rápido, con componentes preconstruidos altamente accesibles y soporte nativo excelente en Android e iOS, minimizando la configuración inicial necesaria en comparación con motores de estilos basados en utilidades (como Tailwind/Gluestack).
+### 5. Arquitectura de Navegación
+En NoteFlow utilizamos tres paradigmas de navegación manejados por Expo Router:
+*   **Pestañas (Tabs):** Se usan para la navegación principal (`/notas`, `/checklists`, `/ideas`). Permiten al usuario cambiar de contexto rápidamente sin perder el estado de la pantalla anterior.
+*   **Pila (Stack):** Se usa para profundizar en el contenido. Por ejemplo, al pulsar una nota, el detalle se abre "encima" de la pantalla actual (`[id].tsx`), permitiendo volver atrás mediante un botón o gesto.
+*   **Modales:** Se usan para flujos de interrupción que el usuario debe completar o cancelar. En nuestro caso, la pantalla de "Nueva Nota" (`nueva-nota.tsx`) se abrirá como un modal deslizable desde abajo.
