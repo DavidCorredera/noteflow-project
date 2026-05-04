@@ -8,6 +8,9 @@ interface NotesStore {
   checklists: ChecklistNote[];
   ideas: IdeaNote[];
   addNote: (note: Note) => void;
+  // NUEVAS FUNCIONES
+  addChecklist: (note: ChecklistNote) => void;
+  addIdea: (note: IdeaNote) => void;
   deleteNote: (id: string) => void;
   toggleChecklistItem: (checklistId: string, itemId: string) => void;
 }
@@ -19,12 +22,16 @@ export const useNotesStore = create<NotesStore>()(
       checklists: [],
       ideas: [],
       
-      addNote: (note) => set((state) => ({ 
-        notes: [...state.notes, note] 
-      })),
+      addNote: (note) => set((state) => ({ notes: [...state.notes, note] })),
+      // AÑADIMOS SU LÓGICA AQUÍ
+      addChecklist: (note) => set((state) => ({ checklists: [...state.checklists, note] })),
+      addIdea: (note) => set((state) => ({ ideas: [...state.ideas, note] })),
       
       deleteNote: (id) => set((state) => ({ 
-        notes: state.notes.filter(n => n.id !== id) 
+        notes: state.notes.filter(n => n.id !== id),
+        // Opcional: que el delete sirva para todos los arrays
+        checklists: state.checklists.filter(c => c.id !== id),
+        ideas: state.ideas.filter(i => i.id !== id),
       })),
       
       toggleChecklistItem: (checklistId, itemId) => set((state) => ({
