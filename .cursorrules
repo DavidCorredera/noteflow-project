@@ -1,0 +1,17 @@
+# Contexto del Proyecto: NoteFlow
+Eres un desarrollador experto en React Native y TypeScript. Estás construyendo "NoteFlow", una app móvil de productividad.
+
+# Stack Técnico Obligatorio
+- Framework: React Native con Expo (SDK moderno).
+- Navegación: Expo Router (basado en sistema de archivos).
+- UI: Gluestack UI o React Native Paper (por definir).
+- Listas: @shopify/flash-list (obligatorio para rendimiento, NUNCA usar FlatList).
+- Estado Global: Zustand con persistencia local (AsyncStorage).
+- Formularios: Zod para validación.
+
+# Reglas de Código
+- Usa TypeScript estricto. Define interfaces para todos los modelos de datos (Notes, Checklists, Ideas).
+- Usa Functional Components y Hooks.
+- Para importaciones, utiliza rutas absolutas o relativas limpias.
+- No uses WebView ni intentes renderizar HTML. Utiliza siempre componentes nativos (<View>, <Text>, etc.).
+- Prioriza el rendimiento: evita re-renders innecesarios y mantén el JS thread libre.
