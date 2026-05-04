@@ -21,6 +21,16 @@ export default function RootLayout() {
     <PaperProvider theme={theme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* NUEVO: Declaramos la pantalla nueva-nota como un modal */}
+        <Stack.Screen 
+          name="nueva-nota" 
+          options={{ 
+            presentation: 'modal', 
+            title: 'Nueva Entrada',
+            headerStyle: { backgroundColor: theme.colors.surface },
+            headerTintColor: theme.colors.onSurface
+          }} 
+        />
       </Stack>
     </PaperProvider>
   );
