@@ -42,14 +42,12 @@ Sigue estos pasos para levantar el proyecto en tu entorno:
    ```bash
    git clone [https://github.com/DavidCorredera/noteflow-project/noteflow.git](https://github.com/DavidCorredera/noteflow-project/noteflow.git)
    cd noteflow
-   
-```
+   ```
 
 2. **Instalar dependencias:**
    ```bash
    npm install --legacy-peer-deps
-   
-```
+   ```
 
 3. **Iniciar el servidor de desarrollo:**
    ```bash
