@@ -40,7 +40,7 @@ Sigue estos pasos para levantar el proyecto en tu entorno:
 
 1. **Clonar el repositorio:**
    ```bash
-   git clone [https://github.com/DavidCorredera/noteflow-project/noteflow.git](https://github.com/DavidCorredera/noteflow-project/noteflow.git)
+   git clone https://github.com/DavidCorredera/noteflow-project/noteflow.git
    cd noteflow
    ```
 
