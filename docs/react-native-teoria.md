@@ -20,3 +20,9 @@ En NoteFlow utilizamos tres paradigmas de navegación manejados por Expo Router:
 *   **Pestañas (Tabs):** Se usan para la navegación principal (`/notas`, `/checklists`, `/ideas`). Permiten al usuario cambiar de contexto rápidamente sin perder el estado de la pantalla anterior.
 *   **Pila (Stack):** Se usa para profundizar en el contenido. Por ejemplo, al pulsar una nota, el detalle se abre "encima" de la pantalla actual (`[id].tsx`), permitiendo volver atrás mediante un botón o gesto.
 *   **Modales:** Se usan para flujos de interrupción que el usuario debe completar o cancelar. En nuestro caso, la pantalla de "Nueva Nota" (`nueva-nota.tsx`) se abrirá como un modal deslizable desde abajo.
+### 6. Gestión de estado (Zustand)
+Para el estado global de NoteFlow hemos elegido **Zustand** en lugar de `useState` o la `Context API` nativa de React.
+*   **Context API vs Zustand:** Context API provoca re-renders innecesarios en todos los componentes que lo consumen cuando cambia cualquier parte del estado, y requiere envolver la app en Providers. Zustand resuelve esto: no necesita Providers (evita el "Provider hell"), es más rápido y nos permite seleccionar piezas específicas del estado para evitar renders.
+*   **Persistencia:** Además, Zustand se integra perfectamente con `AsyncStorage` mediante su middleware `persist`, lo que nos permite guardar los datos localmente en el dispositivo de forma casi automática.
+### 7. Rendimiento en listas (FlashList)
+El componente `FlatList` nativo tiene problemas de rendimiento con listas largas: cuando haces scroll rápido, el hilo de JS no da abasto para crear nuevos componentes y aparecen espacios en blanco. **FlashList de Shopify** soluciona esto reciclando agresivamente las vistas (reutiliza la estructura del componente en memoria y solo cambia los datos). La propiedad clave es `estimatedItemSize`, que ayuda a precalcular la altura total y evitar saltos de scroll.

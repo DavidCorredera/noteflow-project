@@ -5,18 +5,18 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNotesStore } from '../../store/notesStore';
 
 export default function ChecklistDetailScreen() {
-  const { id } = useLocalSearchParams(); // Atrapamos el ID de la URL
+  const { id } = useLocalSearchParams();
   const theme = useTheme();
   const router = useRouter();
 
-  // Buscamos la checklist concreta en el store
   const checklist = useNotesStore(state => state.checklists.find(c => c.id === id));
   const toggleItem = useNotesStore(state => state.toggleChecklistItem);
   const addItem = useNotesStore(state => state.addChecklistItem);
+  // Extraemos la función de borrar
+  const deleteNote = useNotesStore(state => state.deleteNote);
 
   const [newItemText, setNewItemText] = useState('');
 
-  // Si por algún motivo no existe o fue borrada
   if (!checklist) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -36,9 +36,22 @@ export default function ChecklistDetailScreen() {
     setNewItemText('');
   };
 
+  const handleDelete = () => {
+    deleteNote(checklist.id);
+    router.back();
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Text variant="headlineMedium" style={styles.title}>{checklist.title}</Text>
+      {/* Cabecera con Título y Botón de Borrar */}
+      <View style={styles.header}>
+        <Text variant="headlineMedium" style={styles.title}>{checklist.title}</Text>
+        <IconButton 
+          icon="trash-can-outline" 
+          iconColor={theme.colors.error} 
+          onPress={handleDelete} 
+        />
+      </View>
 
       <FlatList
         data={checklist.items}
@@ -90,7 +103,13 @@ export default function ChecklistDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
-  title: { padding: 16, fontWeight: 'bold' },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingRight: 8 
+  },
+  title: { padding: 16, fontWeight: 'bold', flex: 1 },
   list: { flex: 1, paddingHorizontal: 8 },
   itemRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 4 },
   inputRow: { 
