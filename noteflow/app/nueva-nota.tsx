@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { z } from 'zod';
 import { useNotesStore } from '../store/notesStore';
 
-// Regla base para el título (la comparten todos)
+// Regla base para el título
 const titleSchema = z.string().min(3, 'El título debe tener al menos 3 caracteres');
 
 export default function NuevaNotaScreen() {
@@ -13,48 +13,45 @@ export default function NuevaNotaScreen() {
   const router = useRouter();
   const { type } = useLocalSearchParams(); 
   
-  const { addNote, addChecklist, addIdea } = useNotesStore();
+  const addNote = useNotesStore(state => state.addNote);
+  const addChecklist = useNotesStore(state => state.addChecklist);
+  const addIdea = useNotesStore(state => state.addIdea);
 
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState(''); // Para notas
-  const [tagsInput, setTagsInput] = useState(''); // Para ideas
+  const [content, setContent] = useState(''); 
+  const [tagsInput, setTagsInput] = useState(''); 
   const [error, setError] = useState('');
 
   const handleSave = () => {
-    // Validamos el título primero
     const titleResult = titleSchema.safeParse(title);
     if (!titleResult.success) {
       setError(titleResult.error.errors[0].message);
       return;
     }
 
-    const newId = Date.now().toString();
-    const now = new Date();
-
+    // ¡CAMBIO APLICADO! 
+    // Ya no generamos IDs ni Fechas aquí. Todo eso lo hace PostgreSQL.
+    
     if (type === 'note') {
       if (!content.trim()) {
         setError('El contenido no puede estar vacío');
         return;
       }
-      addNote({ id: newId, title, content, createdAt: now, updatedAt: now });
+      // Solo enviamos los datos crudos
+      addNote({ title, content } as any); 
     } 
     
     else if (type === 'checklist') {
-      // Creamos la checklist con una lista de tareas vacía por ahora
-      addChecklist({ id: newId, title, items: [], createdAt: now, updatedAt: now });
+      addChecklist({ title } as any);
     } 
     
     else if (type === 'idea') {
-      // Convertimos un string "react, diseño, app" en un array ["react", "diseño", "app"]
       const tagsArray = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
       addIdea({ 
-        id: newId, 
         title, 
         tags: tagsArray, 
-        color: theme.colors.primaryContainer, // Color por defecto
-        createdAt: now, 
-        updatedAt: now 
-      });
+        color: theme.colors.primaryContainer 
+      } as any);
     }
 
     router.back();
@@ -76,7 +73,6 @@ export default function NuevaNotaScreen() {
         style={styles.input}
       />
       
-      {/* Campos dinámicos según el tipo */}
       {type === 'note' && (
         <TextInput
           label="Escribe aquí..."

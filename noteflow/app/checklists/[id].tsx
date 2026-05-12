@@ -12,7 +12,6 @@ export default function ChecklistDetailScreen() {
   const checklist = useNotesStore(state => state.checklists.find(c => c.id === id));
   const toggleItem = useNotesStore(state => state.toggleChecklistItem);
   const addItem = useNotesStore(state => state.addChecklistItem);
-  // Extraemos la función de borrar
   const deleteNote = useNotesStore(state => state.deleteNote);
 
   const [newItemText, setNewItemText] = useState('');
@@ -28,11 +27,9 @@ export default function ChecklistDetailScreen() {
   const handleAddItem = () => {
     if (!newItemText.trim()) return;
     
-    addItem(checklist.id, {
-      id: Date.now().toString(),
-      text: newItemText,
-      isCompleted: false
-    });
+    // CAMBIO APLICADO: Ahora solo enviamos el ID de la lista y el texto. 
+    // La base de datos generará el ID y el isCompleted.
+    addItem(checklist.id, newItemText);
     setNewItemText('');
   };
 
@@ -43,7 +40,6 @@ export default function ChecklistDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Cabecera con Título y Botón de Borrar */}
       <View style={styles.header}>
         <Text variant="headlineMedium" style={styles.title}>{checklist.title}</Text>
         <IconButton 
@@ -61,7 +57,8 @@ export default function ChecklistDetailScreen() {
           <View style={styles.itemRow}>
             <Checkbox
               status={item.isCompleted ? 'checked' : 'unchecked'}
-              onPress={() => toggleItem(checklist.id, item.id)}
+              // CAMBIO APLICADO: Pasamos item.isCompleted como tercer parámetro
+              onPress={() => toggleItem(checklist.id, item.id, item.isCompleted)}
               color={theme.colors.primary}
             />
             <Text 
