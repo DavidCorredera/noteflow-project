@@ -1,37 +1,35 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
-import { PaperProvider, MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
-import { useColorScheme } from 'react-native';
-import { Colors } from '../constants/theme';
+import { GluestackUIProvider } from '@gluestack-ui/themed';
+import { config } from '../gluestack-ui.config';
+import { useThemeStore } from '../store/themeStore';
+import { getColors } from '../constants/theme';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const isDarkMode = colorScheme === 'dark';
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
+  const load = useThemeStore((s) => s.load);
+  const loaded = useThemeStore((s) => s.loaded);
+  const colors = getColors(isDarkMode);
 
-  const theme = {
-    ...(isDarkMode ? MD3DarkTheme : MD3LightTheme),
-    colors: {
-      ...(isDarkMode ? MD3DarkTheme.colors : MD3LightTheme.colors),
-      primary: isDarkMode ? Colors.dark.primary : Colors.light.primary,
-      background: isDarkMode ? Colors.dark.background : Colors.light.background,
-      surface: isDarkMode ? Colors.dark.surface : Colors.light.surface,
-    },
-  };
+  useEffect(() => { load(); }, []);
+
+  if (!loaded) return null;
 
   return (
-    <PaperProvider theme={theme}>
+    <GluestackUIProvider config={config} colorMode={isDarkMode ? 'dark' : 'light'}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        {/* NUEVO: Declaramos la pantalla nueva-nota como un modal */}
-        <Stack.Screen 
-          name="nueva-nota" 
-          options={{ 
-            presentation: 'modal', 
+        <Stack.Screen
+          name="nueva-nota"
+          options={{
+            presentation: 'modal',
             title: 'Nueva Entrada',
-            headerStyle: { backgroundColor: theme.colors.surface },
-            headerTintColor: theme.colors.onSurface
-          }} 
+            headerStyle: { backgroundColor: colors.surface },
+            headerTintColor: colors.primary,
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
         />
       </Stack>
-    </PaperProvider>
+    </GluestackUIProvider>
   );
 }

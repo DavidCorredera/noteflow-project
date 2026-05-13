@@ -1,58 +1,76 @@
-import { View, StyleSheet } from 'react-native';
-import { Text, FAB, ActivityIndicator, useTheme } from 'react-native-paper';
+import { useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Spinner } from '@gluestack-ui/themed';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { useNotesStore } from '../../store/notesStore';
+import { useThemeStore } from '../../store/themeStore';
+import { getColors } from '../../constants/theme';
 import IdeaCard from '../../components/items/IdeaCard';
 
 export default function IdeasScreen() {
-  const theme = useTheme();
   const router = useRouter();
-  
-  const ideas = useNotesStore((state) => state.ideas);
-  const isLoading = useNotesStore((state) => state.isLoading);
-  const error = useNotesStore((state) => state.error);
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
+  const sortBy = useThemeStore((s) => s.sortBy);
+  const colors = getColors(isDarkMode);
+  const ideas = useNotesStore((s) => s.ideas);
+  const fetchNotes = useNotesStore((s) => s.fetchNotes);
+  const isLoading = useNotesStore((s) => s.isLoading);
+  const error = useNotesStore((s) => s.error);
+
+  useEffect(() => { fetchNotes(); }, []);
+
+  const sorted = useMemo(() => {
+    const copy = [...ideas];
+    if (sortBy === 'oldest') return copy.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+    if (sortBy === 'alpha') return copy.sort((a, b) => a.title.localeCompare(b.title));
+    return copy.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [ideas, sortBy]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator animating={true} size="large" color={theme.colors.primary} />
+          <Spinner color={colors.primary} size="large" />
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={{ color: theme.colors.error }}>Error: {error}</Text>
+          <Text style={[styles.errorText, { color: colors.error }]}>Error: {error}</Text>
         </View>
-      ) : ideas.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <View style={styles.center}>
-          <Text variant="bodyLarge" style={{ color: theme.colors.outline }}>
-            Captura tu primera idea rápida.
-          </Text>
+          <Text style={styles.emptyIcon}>💡</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No tienes ideas</Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Captura tus ideas rápidas aquí</Text>
         </View>
       ) : (
         <FlashList
-          data={ideas}
+          data={sorted}
           renderItem={({ item }) => (
-            <IdeaCard note={item} onPress={() => router.push(`/ideas/${item.id}` as any)} />
+            <IdeaCard note={item} onPress={() => router.push(`/ideas/${item.id}` as any)} colors={colors} />
           )}
           keyExtractor={(item) => item.id}
-          estimatedItemSize={100}
-          contentContainerStyle={{ paddingVertical: 16 }}
+          contentContainerStyle={{ paddingVertical: 12 }}
         />
       )}
-      
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primaryContainer }]}
-        onPress={() => router.push('/nueva-nota?type=idea' as any)}
-      />
+      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={() => router.push('/nueva-nota?type=idea' as any)} activeOpacity={0.8}>
+        <Text style={styles.fabIcon}>+</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  fab: { position: 'absolute', margin: 16, right: 0, bottom: 0 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  errorText: { fontSize: 15, textAlign: 'center' },
+  emptyIcon: { fontSize: 48, marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, textAlign: 'center' },
+  fab: {
+    position: 'absolute', right: 20, bottom: 20, width: 56, height: 56, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+  },
+  fabIcon: { fontSize: 28, color: '#FFFFFF', fontWeight: '300', marginTop: -2 },
 });

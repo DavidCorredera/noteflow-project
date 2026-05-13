@@ -5,7 +5,10 @@ import {
   createNote, 
   deleteNoteApi, 
   addChecklistItemApi, 
-  toggleChecklistItemApi 
+  toggleChecklistItemApi,
+  deleteChecklistItemApi,
+  updateChecklistItemApi,
+  updateNoteApi,
 } from '../lib/api';
 
 interface NotesStore {
@@ -22,6 +25,11 @@ interface NotesStore {
   deleteNote: (id: string) => Promise<void>;
   toggleChecklistItem: (checklistId: string, itemId: string, currentStatus: boolean) => Promise<void>;
   addChecklistItem: (checklistId: string, text: string) => Promise<void>;
+  deleteChecklistItem: (checklistId: string, itemId: string) => Promise<void>;
+  updateChecklistItem: (checklistId: string, itemId: string, text: string) => Promise<void>;
+  updateNote: (id: string, data: Partial<Note>) => Promise<void>;
+  updateIdea: (id: string, data: Partial<IdeaNote>) => Promise<void>;
+  updateChecklist: (id: string, data: Partial<ChecklistNote>) => Promise<void>;
 }
 
 export const useNotesStore = create<NotesStore>((set, get) => ({
@@ -41,8 +49,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         ...n,
         createdAt: new Date(n.created_at),
         updatedAt: new Date(n.updated_at),
-        items: n.items || [], // <--- ¡Salvavidas para ChecklistCard!
-        tags: n.tags || [],   // <--- ¡Salvavidas para IdeaCard!
+        items: n.items || [],
+        tags: n.tags || [],
       }));
 
       set({
@@ -76,7 +84,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   addIdea: async (note) => {
     try {
       const newIdea = await createNote({ ...note, type: 'idea' });
-      newIdea.tags = note.tags || []; // <--- ¡Salvavidas al crear una nueva!
+      newIdea.tags = note.tags || [];
       set((state) => ({ ideas: [newIdea, ...state.ideas] }));
     } catch (error: any) { set({ error: error.message }); }
   },
@@ -104,6 +112,59 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
             ? { ...c, items: [...(c.items || []), newItem] } 
             : c
         )
+      }));
+    } catch (error: any) { set({ error: error.message }); }
+  },
+
+  deleteChecklistItem: async (checklistId, itemId) => {
+    try {
+      await deleteChecklistItemApi(itemId);
+      set((state) => ({
+        checklists: state.checklists.map(c =>
+          c.id === checklistId
+            ? { ...c, items: (c.items || []).filter(i => i.id !== itemId) }
+            : c
+        )
+      }));
+    } catch (error: any) { set({ error: error.message }); }
+  },
+
+  updateChecklistItem: async (checklistId, itemId, text) => {
+    try {
+      await updateChecklistItemApi(itemId, text);
+      set((state) => ({
+        checklists: state.checklists.map(c =>
+          c.id === checklistId
+            ? { ...c, items: (c.items || []).map(i => i.id === itemId ? { ...i, text } : i) }
+            : c
+        )
+      }));
+    } catch (error: any) { set({ error: error.message }); }
+  },
+
+  updateNote: async (id, data) => {
+    try {
+      const updated = await updateNoteApi(id, data);
+      set((state) => ({
+        notes: state.notes.map(n => n.id === id ? { ...n, ...updated, ...data } : n),
+      }));
+    } catch (error: any) { set({ error: error.message }); }
+  },
+
+  updateIdea: async (id, data) => {
+    try {
+      const updated = await updateNoteApi(id, data);
+      set((state) => ({
+        ideas: state.ideas.map(i => i.id === id ? { ...i, ...updated, ...data } : i),
+      }));
+    } catch (error: any) { set({ error: error.message }); }
+  },
+
+  updateChecklist: async (id, data) => {
+    try {
+      const updated = await updateNoteApi(id, data);
+      set((state) => ({
+        checklists: state.checklists.map(c => c.id === id ? { ...c, ...updated, ...data } : c),
       }));
     } catch (error: any) { set({ error: error.message }); }
   },
