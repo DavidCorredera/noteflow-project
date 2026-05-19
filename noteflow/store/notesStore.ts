@@ -67,24 +67,24 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   // 2. Crear datos
   addNote: async (note) => {
     try {
-      const newNote = await createNote({ ...note, type: 'note' });
+      const res = await createNote({ ...note, type: 'note' });
+      const newNote = { ...res, createdAt: new Date(res.created_at), updatedAt: new Date(res.updated_at) };
       set((state) => ({ notes: [newNote, ...state.notes] }));
     } catch (error: any) { set({ error: error.message }); }
   },
 
   addChecklist: async (note) => {
     try {
-      const newChecklist = await createNote({ ...note, type: 'checklist' });
-      // Aseguramos que tenga el array de items vacío para la UI
-      newChecklist.items = [];
+      const res = await createNote({ ...note, type: 'checklist' });
+      const newChecklist = { ...res, createdAt: new Date(res.created_at), updatedAt: new Date(res.updated_at), items: [] };
       set((state) => ({ checklists: [newChecklist, ...state.checklists] }));
     } catch (error: any) { set({ error: error.message }); }
   },
 
   addIdea: async (note) => {
     try {
-      const newIdea = await createNote({ ...note, type: 'idea' });
-      newIdea.tags = note.tags || [];
+      const res = await createNote({ ...note, type: 'idea' });
+      const newIdea = { ...res, createdAt: new Date(res.created_at), updatedAt: new Date(res.updated_at), tags: note.tags || [] };
       set((state) => ({ ideas: [newIdea, ...state.ideas] }));
     } catch (error: any) { set({ error: error.message }); }
   },

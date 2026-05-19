@@ -79,7 +79,7 @@ export default function DashboardScreen() {
       )}
 
       <View style={styles.recentSection}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Actividad reciente</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12 }]}>Actividad reciente</Text>
         {isLoading ? (
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Cargando...</Text>
         ) : allRecent.length === 0 ? (
