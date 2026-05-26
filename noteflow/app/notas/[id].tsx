@@ -1,9 +1,12 @@
-import { useState, useLayoutEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useLayoutEffect, useEffect, useRef } from 'react';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useNotesStore } from '../../store/notesStore';
 import { useThemeStore } from '../../store/themeStore';
 import { getColors } from '../../constants/theme';
+import NoteComposer from '../../components/notes/NoteComposer';
+import { NoteSketch, parseNoteContent, serializeNoteContent } from '../../lib/noteContent';
 
 export default function NoteDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -16,78 +19,111 @@ export default function NoteDetailScreen() {
   const updateNote = useNotesStore(s => s.updateNote);
 
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [dirty, setDirty] = useState(false);
+  const [body, setBody] = useState('');
+  const [sketches, setSketches] = useState<NoteSketch[]>([]);
+  const hasChanges = useRef(false);
+  const titleRef = useRef(title);
+  const bodyRef = useRef(body);
+  const sketchesRef = useRef(sketches);
 
   useLayoutEffect(() => {
     if (note) {
+      const parsedContent = parseNoteContent(note.content);
       setTitle(note.title);
-      setContent(note.content);
+      setBody(parsedContent.body);
+      setSketches(parsedContent.sketches);
       navigation.setOptions({
-        title: note.title,
-        headerStyle: { backgroundColor: colors.surface },
+        title: '',
+        headerTransparent: false,
+        headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.primary,
-        headerTitleStyle: { fontWeight: '700' },
+        headerRight: () => (
+          <TouchableOpacity onPress={handleDelete} style={{ paddingHorizontal: 12 }}>
+            <Text style={[styles.headerAction, { color: colors.error }]}>Eliminar</Text>
+          </TouchableOpacity>
+        ),
       });
     }
   }, [note, navigation, colors]);
 
+  useEffect(() => {
+    titleRef.current = title;
+    bodyRef.current = body;
+    sketchesRef.current = sketches;
+  }, [title, body, sketches]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      if (hasChanges.current && note) {
+        updateNote(note.id, {
+          title: titleRef.current,
+          content: serializeNoteContent({
+            version: 1,
+            body: bodyRef.current,
+            sketches: sketchesRef.current,
+          }),
+        });
+      }
+    });
+    return unsubscribe;
+  }, [navigation, note]);
+
+  const insets = useSafeAreaInsets();
+
   if (!note) return null;
 
-  const handleDelete = () => { deleteNote(note.id); router.back(); };
-  const handleSave = () => {
-    if (!title.trim()) return;
-    updateNote(note.id, { title, content });
-    setDirty(false);
+  const handleDelete = () => {
+    Alert.alert('Eliminar nota', 'Esta accion no se puede deshacer.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => { deleteNote(note.id); router.back(); } },
+    ]);
   };
-  const dateStr = new Date(note.updatedAt).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  const dateStr = new Date(note.updatedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TextInput
-            style={[styles.titleInput, { color: colors.text, borderBottomColor: colors.border }]}
-            value={title}
-            onChangeText={(t) => { setTitle(t); setDirty(true); }}
-            placeholderTextColor={colors.textSecondary}
-          />
-          <Text style={[styles.date, { color: colors.textSecondary }]}>{dateStr}</Text>
-        </View>
-        <View style={styles.headerActions}>
-          {dirty && (
-            <TouchableOpacity onPress={handleSave} style={[styles.saveButton, { backgroundColor: colors.primary }]}>
-              <Text style={styles.saveButtonText}>Guardar</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={handleDelete} style={[styles.deleteButton, { backgroundColor: colors.deleteBg }]}>
-            <Text>🗑️</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
-      <TextInput
-        style={[styles.contentInput, { color: colors.text }]}
-        value={content}
-        onChangeText={(t) => { setContent(t); setDirty(true); }}
-        multiline
-        textAlignVertical="top"
-        placeholderTextColor={colors.textSecondary}
-      />
-    </ScrollView>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 18 : 0}
+    >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: Math.max(96, insets.bottom + 72) }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={[styles.date, { color: colors.textTertiary }]}>{dateStr}</Text>
+        <TextInput
+          style={[styles.titleInput, { color: colors.text }]}
+          value={title}
+          onChangeText={(t) => { setTitle(t); hasChanges.current = true; }}
+          placeholder="Titulo de la nota"
+          placeholderTextColor={colors.textTertiary}
+        />
+        <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
+        <NoteComposer
+          body={body}
+          colors={colors}
+          onBodyChange={(nextBody) => {
+            setBody(nextBody);
+            hasChanges.current = true;
+          }}
+          onSketchesChange={(nextSketches) => {
+            setSketches(nextSketches);
+            hasChanges.current = true;
+          }}
+          sketches={sketches}
+        />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 20, paddingBottom: 12 },
-  headerLeft: { flex: 1, marginRight: 12 },
-  titleInput: { fontSize: 24, fontWeight: '800', marginBottom: 6, borderBottomWidth: 1, paddingVertical: 4 },
-  date: { fontSize: 13 },
-  headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  saveButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
-  saveButtonText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  deleteButton: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  divider: { height: 1, marginHorizontal: 20 },
-  contentInput: { padding: 20, fontSize: 16, lineHeight: 26, minHeight: 200 },
+  contentContainer: { padding: 24, paddingTop: 24 },
+  headerAction: { fontSize: 15, fontWeight: '600' },
+  date: { fontSize: 12, fontWeight: '500', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  titleInput: { fontSize: 26, fontWeight: '800', marginBottom: 16, paddingVertical: 4 },
+  divider: { height: 1, marginBottom: 20 },
 });

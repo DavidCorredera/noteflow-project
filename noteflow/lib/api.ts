@@ -8,6 +8,7 @@ export type CreateNoteInput = {
   type: 'note' | 'checklist' | 'idea';
   content?: string;
   color?: string;
+  tags?: string[];
 };
 
 export async function getNotes() {

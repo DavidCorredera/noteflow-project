@@ -1,5 +1,6 @@
-import { useState, useLayoutEffect, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useLayoutEffect, useEffect, useRef } from 'react';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useNotesStore } from '../../store/notesStore';
 import { useThemeStore } from '../../store/themeStore';
@@ -18,48 +19,70 @@ export default function IdeaDetailScreen() {
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const [dirty, setDirty] = useState(false);
   const [editingTagIdx, setEditingTagIdx] = useState<number | null>(null);
   const [editingTagText, setEditingTagText] = useState('');
-  const editInputRef = useRef<TextInput>(null);
+  const hasChanges = useRef(false);
+  const titleRef = useRef(title);
+  const tagsRef = useRef(tags);
 
   useLayoutEffect(() => {
     if (idea) {
       setTitle(idea.title);
       setTags(idea.tags || []);
       navigation.setOptions({
-        title: idea.title,
-        headerStyle: { backgroundColor: colors.surface },
+        title: '',
+        headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.primary,
-        headerTitleStyle: { fontWeight: '700' },
+        headerRight: () => (
+          <TouchableOpacity onPress={handleDelete} style={{ paddingHorizontal: 12 }}>
+            <Text style={[styles.headerAction, { color: colors.error }]}>Eliminar</Text>
+          </TouchableOpacity>
+        ),
       });
     }
   }, [idea, navigation, colors]);
 
+  useEffect(() => { titleRef.current = title; tagsRef.current = tags; }, [title, tags]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      if (hasChanges.current && idea) {
+        updateIdea(idea.id, { title: titleRef.current, tags: tagsRef.current });
+      }
+    });
+    return unsubscribe;
+  }, [navigation, idea]);
+
+  const insets = useSafeAreaInsets();
+
   if (!idea) return null;
 
-  const handleDelete = () => { deleteNote(idea.id); router.back(); };
-  const handleSave = () => {
-    if (!title.trim()) return;
-    updateIdea(idea.id, { title, tags });
-    setDirty(false);
+  const handleDelete = () => {
+    Alert.alert('Eliminar idea', 'Esta accion no se puede deshacer.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => { deleteNote(idea.id); router.back(); } },
+    ]);
   };
+
+  const saveTags = (newTags: string[]) => {
+    setTags(newTags);
+    hasChanges.current = true;
+    if (idea) updateIdea(idea.id, { tags: newTags });
+  };
+
   const handleAddTag = () => {
     const newTag = tagInput.trim();
     if (newTag && !tags.includes(newTag)) {
-      setTags([...tags, newTag]);
+      saveTags([...tags, newTag]);
       setTagInput('');
-      setDirty(true);
     }
   };
   const handleRemoveTag = (tag: string) => {
-    setTags(tags.filter(t => t !== tag));
-    setDirty(true);
+    saveTags(tags.filter(t => t !== tag));
   };
   const handleStartEditTag = (idx: number) => {
     setEditingTagIdx(idx);
     setEditingTagText(tags[idx]);
-    setTimeout(() => editInputRef.current?.focus(), 50);
   };
   const handleFinishEditTag = () => {
     if (editingTagIdx !== null && editingTagText.trim()) {
@@ -67,8 +90,7 @@ export default function IdeaDetailScreen() {
       if (newText !== tags[editingTagIdx]) {
         const updated = [...tags];
         updated[editingTagIdx] = newText;
-        setTags(updated);
-        setDirty(true);
+        saveTags(updated);
       }
     }
     setEditingTagIdx(null);
@@ -76,34 +98,22 @@ export default function IdeaDetailScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.body}>
-        <View style={styles.headerRow}>
-          <TextInput
-            style={[styles.titleInput, { color: colors.text, borderBottomColor: colors.border }]}
-            value={title}
-            onChangeText={(t) => { setTitle(t); setDirty(true); }}
-            placeholderTextColor={colors.textSecondary}
-          />
-          <View style={styles.headerActions}>
-            {dirty && (
-              <TouchableOpacity onPress={handleSave} style={[styles.saveButton, { backgroundColor: colors.primary }]}>
-                <Text style={styles.saveButtonText}>Guardar</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={handleDelete} style={[styles.deleteButton, { backgroundColor: colors.deleteBg }]}>
-              <Text>🗑️</Text>
-            </TouchableOpacity>
-          </View>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + (Platform.OS === 'ios' ? 64 : 72) }]}>
+      <TextInput
+        style={[styles.titleInput, { color: colors.text }]}
+        value={title}
+        onChangeText={(t) => { setTitle(t); hasChanges.current = true; }}
+        placeholderTextColor={colors.textTertiary}
+      />
+      <View style={styles.tagsSection}>
+        <View style={styles.tagsHeader}>
+          <Text style={[styles.tagsLabel, { color: colors.textTertiary }]}>Etiquetas</Text>
         </View>
-
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Etiquetas</Text>
         <View style={styles.tagsContainer}>
           {tags.map((tag, idx) => (
-            <View key={`${tag}-${idx}`} style={[styles.tag, { backgroundColor: colors.ideaColors[idx % colors.ideaColors.length], borderColor: colors.border }]}>
+            <View key={`${tag}-${idx}`} style={[styles.tag, { backgroundColor: colors.ideaColors[idx % colors.ideaColors.length] }]}>
               {editingTagIdx === idx ? (
                 <TextInput
-                  ref={editInputRef}
                   style={[styles.tagEditInput, { color: colors.text }]}
                   value={editingTagText}
                   onChangeText={setEditingTagText}
@@ -112,28 +122,36 @@ export default function IdeaDetailScreen() {
                   returnKeyType="done"
                 />
               ) : (
-                <TouchableOpacity onPress={() => handleStartEditTag(idx)} style={styles.tagTextTouchable}>
+                <TouchableOpacity onPress={() => handleStartEditTag(idx)} style={styles.tagTextButton} activeOpacity={0.75}>
                   <Text style={[styles.tagText, { color: colors.text }]}>{tag}</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={() => handleRemoveTag(tag)} style={styles.tagRemoveTouchable}>
-                <Text style={styles.tagRemove}>✕</Text>
+              <TouchableOpacity
+                onPress={() => handleRemoveTag(tag)}
+                style={[styles.tagRemoveBtn, { backgroundColor: isDarkMode ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.12)' }]}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.tagRemove}>x</Text>
               </TouchableOpacity>
             </View>
           ))}
         </View>
         <View style={styles.addTagRow}>
           <TextInput
-            style={[styles.tagInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+            style={[styles.tagInput, { color: colors.text, borderBottomColor: colors.border }]}
             value={tagInput}
             onChangeText={setTagInput}
             onSubmitEditing={handleAddTag}
-            placeholder="Añadir etiqueta..."
-            placeholderTextColor={colors.textSecondary}
-            returnKeyType="done"
+            placeholder="Nueva etiqueta..."
+            placeholderTextColor={colors.textTertiary}
           />
-          <TouchableOpacity onPress={handleAddTag} style={[styles.addTagButton, { backgroundColor: colors.primary }]}>
-            <Text style={styles.addTagButtonText}>+</Text>
+          <TouchableOpacity
+            onPress={handleAddTag}
+            disabled={!tagInput.trim()}
+            style={[styles.addTagBtn, { backgroundColor: colors.primary, opacity: tagInput.trim() ? 1 : 0.45 }]}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.addTagBtnText}>+</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -143,23 +161,42 @@ export default function IdeaDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  body: { padding: 20 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
-  titleInput: { fontSize: 24, fontWeight: '800', flex: 1, marginRight: 12, borderBottomWidth: 1, paddingVertical: 4 },
-  headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  saveButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
-  saveButtonText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  deleteButton: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  sectionLabel: { fontSize: 13, fontWeight: '600', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  tag: { borderRadius: 10, paddingLeft: 14, paddingVertical: 6, borderWidth: 1, flexDirection: 'row', alignItems: 'center' },
-  tagTextTouchable: { paddingVertical: 2 },
-  tagText: { fontSize: 13, fontWeight: '600' },
-  tagEditInput: { fontSize: 13, fontWeight: '600', paddingVertical: 2, minWidth: 40 },
-  tagRemoveTouchable: { paddingHorizontal: 10, paddingVertical: 2 },
-  tagRemove: { fontSize: 13, color: '#ef4444', fontWeight: '700' },
-  addTagRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  tagInput: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14 },
-  addTagButton: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  addTagButtonText: { fontSize: 22, color: '#FFFFFF', fontWeight: '300' },
+  contentContainer: { padding: 24, paddingBottom: 60 },
+  headerAction: { fontSize: 15, fontWeight: '600' },
+  titleInput: { fontSize: 26, fontWeight: '800', marginBottom: 28, paddingVertical: 4 },
+  tagsSection: {},
+  tagsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  tagsLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
+  tag: {
+    borderRadius: 14,
+    minHeight: 46,
+    paddingLeft: 14,
+    paddingRight: 8,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tagTextButton: { paddingVertical: 8, paddingRight: 8 },
+  tagText: { fontSize: 15, fontWeight: '600' },
+  tagEditInput: { fontSize: 15, fontWeight: '600', paddingVertical: 8, minWidth: 72, paddingRight: 8 },
+  tagRemoveBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
+  },
+  tagRemove: { fontSize: 16, lineHeight: 16, color: '#ef4444', fontWeight: '800' },
+  addTagRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tagInput: { flex: 1, fontSize: 16, paddingVertical: 12, borderBottomWidth: 1, minHeight: 48 },
+  addTagBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addTagBtnText: { fontSize: 26, color: '#FFFFFF', fontWeight: '400', marginTop: -1 },
 });

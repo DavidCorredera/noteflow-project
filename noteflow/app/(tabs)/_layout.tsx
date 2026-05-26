@@ -1,19 +1,38 @@
 import { Tabs } from 'expo-router';
-import { View, Text } from 'react-native';
+import { View, Text, Platform, Animated } from 'react-native';
+import { useRef, useEffect } from 'react';
+import { BlurView } from 'expo-blur';
 import { useThemeStore } from '../../store/themeStore';
 import { getColors } from '../../constants/theme';
 
-function TabIcon({ name }: { name: string; color: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    dashboard: '📊',
-    notas: '📝',
-    checklists: '✅',
-    ideas: '💡',
-    settings: '⚙️',
-  };
+const TAB_ICONS: Record<string, string> = {
+  dashboard: '\u2302',
+  notas: 'N',
+  checklists: '\u2611',
+  ideas: '\u2606',
+  settings: '\u2261',
+};
+
+function TabIcon({ name, focused, color, bgColor }: { name: string; focused: boolean; color: string; bgColor: string }) {
+  const scale = useRef(new Animated.Value(focused ? 1 : 0.85)).current;
+
+  useEffect(() => {
+    Animated.spring(scale, {
+      toValue: focused ? 1 : 0.85,
+      friction: 5,
+      tension: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [focused]);
+
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: 22 }}>{icons[name] || '📄'}</Text>
+    <View style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 40 }}>
+      {focused ? (
+        <Animated.View style={{ position: 'absolute', width: 34, height: 28, borderRadius: 14, backgroundColor: bgColor + '20', transform: [{ scale }] }} />
+      ) : null}
+      <Animated.Text style={{ fontSize: focused ? 22 : 20, fontWeight: focused ? '700' : '500', color, marginTop: -1, transform: [{ scale }] }}>
+        {TAB_ICONS[name]}
+      </Animated.Text>
     </View>
   );
 }
@@ -26,58 +45,43 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarInactiveTintColor: colors.textTertiary,
         headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.text,
-        headerTitleStyle: { fontWeight: '700', fontSize: 18 },
+        headerTintColor: colors.primary,
+        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.borderLight,
-          borderTopWidth: 1,
-          elevation: 0,
-          shadowOpacity: 0,
-          height: 60,
-          paddingBottom: 8,
+          position: 'absolute',
+          bottom: Platform.OS === 'ios' ? 20 : 14,
+          left: Platform.OS === 'ios' ? 16 : 12,
+          right: Platform.OS === 'ios' ? 16 : 12,
+          borderRadius: 28,
+          height: Platform.OS === 'ios' ? 60 : 56,
+          paddingBottom: 4,
           paddingTop: 4,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.12,
+          shadowRadius: 16,
+          borderTopWidth: 0,
+          overflow: 'hidden',
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarBackground: () => (
+          Platform.OS === 'ios'
+            ? <BlurView intensity={75} tint={isDarkMode ? 'dark' : 'light'} style={{ flex: 1, borderRadius: 28 }} />
+            : <View style={{ flex: 1, backgroundColor: isDarkMode ? 'rgba(26,22,50,0.6)' : 'rgba(255,255,255,0.55)', borderRadius: 28 }} />
+        ),
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', letterSpacing: 0.25, marginTop: -2 },
+        tabBarShowLabel: true,
+        tabBarIconStyle: { marginBottom: -1 },
+        tabBarItemStyle: { paddingVertical: 2 },
       }}
     >
-      <Tabs.Screen
-        name="dashboard"
-        options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="dashboard" color={color} focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="notas"
-        options={{
-          title: 'Notas',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="notas" color={color} focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="checklists"
-        options={{
-          title: 'Tareas',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="checklists" color={color} focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="ideas"
-        options={{
-          title: 'Ideas',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="ideas" color={color} focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Ajustes',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="settings" color={color} focused={focused} />,
-        }}
-      />
+      <Tabs.Screen name="dashboard" options={{ title: 'Inicio', tabBarIcon: ({ focused, color }) => <TabIcon name="dashboard" focused={focused} color={color} bgColor={colors.primary} /> }} />
+      <Tabs.Screen name="notas" options={{ title: 'Notas', tabBarIcon: ({ focused, color }) => <TabIcon name="notas" focused={focused} color={color} bgColor={colors.primary} /> }} />
+      <Tabs.Screen name="checklists" options={{ title: 'Tareas', tabBarIcon: ({ focused, color }) => <TabIcon name="checklists" focused={focused} color={color} bgColor={colors.primary} /> }} />
+      <Tabs.Screen name="ideas" options={{ title: 'Ideas', tabBarIcon: ({ focused, color }) => <TabIcon name="ideas" focused={focused} color={color} bgColor={colors.primary} /> }} />
+      <Tabs.Screen name="settings" options={{ title: 'Ajustes', tabBarIcon: ({ focused, color }) => <TabIcon name="settings" focused={focused} color={color} bgColor={colors.primary} /> }} />
     </Tabs>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Spinner } from '@gluestack-ui/themed';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
@@ -30,30 +30,25 @@ export default function IdeasScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {isLoading ? (
-        <View style={styles.center}>
-          <Spinner color={colors.primary} size="large" />
-        </View>
+        <View style={styles.center}><Spinner color={colors.primary} size="large" /></View>
       ) : error ? (
-        <View style={styles.center}>
-          <Text style={[styles.errorText, { color: colors.error }]}>Error: {error}</Text>
-        </View>
+        <View style={styles.center}><Text style={[styles.errorText, { color: colors.error }]}>Error: {error}</Text></View>
       ) : sorted.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyIcon}>💡</Text>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No tienes ideas</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Captura tus ideas rápidas aquí</Text>
+          <Text style={[styles.emptyIcon, { color: colors.textTertiary }]}>I</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Sin ideas</Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>Captura tus ideas rapidas aqui</Text>
         </View>
       ) : (
         <FlashList
           data={sorted}
-          renderItem={({ item }) => (
-            <IdeaCard note={item} onPress={() => router.push(`/ideas/${item.id}` as any)} colors={colors} />
-          )}
+          renderItem={({ item }) => <IdeaCard note={item} onPress={() => router.push(`/ideas/${item.id}` as any)} colors={colors} />}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingVertical: 12 }}
+          contentContainerStyle={{ paddingVertical: 16 }}
+          showsVerticalScrollIndicator={false}
         />
       )}
-      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={() => router.push('/nueva-nota?type=idea' as any)} activeOpacity={0.8}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]} onPress={() => router.push('/nueva-nota?type=idea' as any)} activeOpacity={0.8}>
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
     </View>
@@ -64,13 +59,13 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   errorText: { fontSize: 15, textAlign: 'center' },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, textAlign: 'center' },
+  emptyIcon: { fontSize: 44, fontWeight: '800', marginBottom: 16, opacity: 0.25 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
+  emptySubtitle: { fontSize: 14, textAlign: 'center', opacity: 0.7 },
   fab: {
-    position: 'absolute', right: 20, bottom: 20, width: 56, height: 56, borderRadius: 16,
+    position: 'absolute', right: 24, bottom: Platform.OS === 'ios' ? 100 : 90, width: 52, height: 52, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6,
   },
-  fabIcon: { fontSize: 28, color: '#FFFFFF', fontWeight: '300', marginTop: -2 },
+  fabIcon: { fontSize: 26, color: '#FFFFFF', fontWeight: '300', marginTop: -2 },
 });
