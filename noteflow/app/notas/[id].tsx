@@ -21,6 +21,7 @@ export default function NoteDetailScreen() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [sketches, setSketches] = useState<NoteSketch[]>([]);
+  const [isDrawing, setIsDrawing] = useState(false);
   const hasChanges = useRef(false);
   const titleRef = useRef(title);
   const bodyRef = useRef(body);
@@ -89,6 +90,7 @@ export default function NoteDetailScreen() {
     >
       <ScrollView
         style={styles.container}
+        scrollEnabled={!isDrawing}
         contentContainerStyle={[styles.contentContainer, { paddingBottom: Math.max(96, insets.bottom + 72) }]}
         keyboardShouldPersistTaps="handled"
       >
@@ -112,6 +114,8 @@ export default function NoteDetailScreen() {
             setSketches(nextSketches);
             hasChanges.current = true;
           }}
+          onDrawStart={() => setIsDrawing(true)}
+          onDrawEnd={() => setIsDrawing(false)}
           sketches={sketches}
         />
       </ScrollView>

@@ -23,11 +23,13 @@ interface Props {
   colors: AppColors;
   onBodyChange: (body: string) => void;
   onSketchesChange: (sketches: NoteSketch[]) => void;
+  onDrawStart?: () => void;
+  onDrawEnd?: () => void;
   placeholder?: string;
   sketches: NoteSketch[];
 }
 
-const BRUSH_COLORS = ['#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9'];
+const BRUSH_COLORS = ['#000000', '#ffffff', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#6b7280'];
 const BRUSH_SIZES = [2.5, 4, 6];
 
 type ToolAction = {
@@ -44,6 +46,8 @@ export default function NoteComposer({
   colors,
   onBodyChange,
   onSketchesChange,
+  onDrawStart,
+  onDrawEnd,
   placeholder = 'Empieza a escribir...',
   sketches,
 }: Props) {
@@ -61,7 +65,6 @@ export default function NoteComposer({
     selectionRef.current = selection;
     requestAnimationFrame(() => {
       inputRef.current?.setNativeProps({ selection });
-      inputRef.current?.focus();
     });
   };
 
@@ -231,7 +234,10 @@ export default function NoteComposer({
             <TextInput
               ref={inputRef}
               multiline
-              scrollEnabled={false}
+              scrollEnabled={true}
+              autoCorrect={false}
+              autoComplete="off"
+              spellCheck={false}
               style={[styles.editorInput, { color: colors.text }]}
               value={body}
               onChangeText={onBodyChange}
@@ -258,10 +264,10 @@ export default function NoteComposer({
                 <TouchableOpacity
                   key={color}
                   onPress={() => setBrushColor(color)}
-                  style={[
-                    styles.colorDot,
-                    { backgroundColor: color, borderColor: brushColor === color ? colors.text : 'transparent' },
-                  ]}
+                    style={[
+                      styles.colorDot,
+                      { backgroundColor: color, borderColor: brushColor === color ? colors.text : colors.border },
+                    ]}
                   activeOpacity={0.85}
                 />
               ))}
@@ -293,7 +299,13 @@ export default function NoteComposer({
           {sketches.map((sketch, index) => (
             <View key={sketch.id} style={[styles.sketchCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.sketchCardHeader}>
-                <Text style={[styles.sketchCardTitle, { color: colors.text }]}>{sketch.title || `Lienzo ${index + 1}`}</Text>
+                <TextInput
+                  style={[styles.sketchCardTitle, { color: colors.text, borderBottomColor: colors.border }]}
+                  value={sketch.title || `Lienzo ${index + 1}`}
+                  onChangeText={(newTitle) => updateSketch(sketch.id, (current) => ({ ...current, title: newTitle }))}
+                  placeholder="Nombre del lienzo"
+                  placeholderTextColor={colors.textTertiary}
+                />
                 <View style={styles.sketchActions}>
                   <TouchableOpacity
                     onPress={() => updateSketch(sketch.id, (current) => ({ ...current, strokes: current.strokes.slice(0, -1) }))}
@@ -324,6 +336,8 @@ export default function NoteComposer({
                 sketch={sketch}
                 strokeColor={brushColor}
                 strokeWidth={brushWidth}
+                onDrawStart={onDrawStart}
+                onDrawEnd={onDrawEnd}
                 onChange={(nextSketch) => updateSketch(sketch.id, () => nextSketch)}
               />
             </View>
@@ -412,7 +426,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   editorInput: {
-    minHeight: 360,
+    minHeight: 200,
+    maxHeight: 500,
     fontSize: 16,
     lineHeight: 28,
     paddingVertical: 0,
@@ -456,6 +471,7 @@ const styles = StyleSheet.create({
   },
   colorRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
   colorDot: {

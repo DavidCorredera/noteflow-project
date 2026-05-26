@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { PanResponder, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, PanResponder, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AppColors } from '../../constants/theme';
 import { NoteSketch, NoteSketchPoint, NoteSketchStroke, createNoteEntityId } from '../../lib/noteContent';
@@ -10,10 +10,12 @@ interface Props {
   sketch: NoteSketch;
   strokeColor?: string;
   strokeWidth?: number;
+  onDrawStart?: () => void;
+  onDrawEnd?: () => void;
   onChange?: (nextSketch: NoteSketch) => void;
 }
 
-const CANVAS_HEIGHT = 220;
+const CANVAS_HEIGHT = 300;
 
 function buildPath(points: NoteSketchPoint[], width: number, height: number) {
   return points
@@ -38,6 +40,8 @@ export default function SketchCanvas({
   sketch,
   strokeColor = colors.primary,
   strokeWidth = 3,
+  onDrawStart,
+  onDrawEnd,
   onChange,
 }: Props) {
   const [canvasWidth, setCanvasWidth] = useState(1);
@@ -45,6 +49,7 @@ export default function SketchCanvas({
   const lastPointRef = useRef<NoteSketchPoint | null>(null);
 
   const commitStroke = () => {
+    onDrawEnd?.();
     if (readOnly || draftPoints.length === 0 || !onChange) {
       setDraftPoints([]);
       return;
@@ -72,6 +77,8 @@ export default function SketchCanvas({
         onMoveShouldSetPanResponder: () => !readOnly,
         onPanResponderGrant: (event) => {
           if (readOnly) return;
+          Keyboard.dismiss();
+          onDrawStart?.();
           const nextPoint = {
             x: Math.max(0, Math.min(1, event.nativeEvent.locationX / canvasWidth)),
             y: Math.max(0, Math.min(1, event.nativeEvent.locationY / CANVAS_HEIGHT)),
