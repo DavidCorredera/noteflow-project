@@ -18,7 +18,7 @@ function useScreenOptions() {
     headerBackground: () => (
       Platform.OS === 'ios'
         ? <BlurView intensity={80} tint={isDarkMode ? 'dark' : 'light'} style={{ flex: 1 }} />
-        : <View style={{ flex: 1, backgroundColor: colors.surface }} />
+        : <View style={{ flex: 1, backgroundColor: 'transparent' }} />
     ),
   };
 }

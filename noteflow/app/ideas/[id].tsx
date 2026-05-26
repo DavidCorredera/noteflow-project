@@ -1,6 +1,5 @@
 import { useState, useLayoutEffect, useEffect, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useNotesStore } from '../../store/notesStore';
 import { useThemeStore } from '../../store/themeStore';
@@ -31,6 +30,7 @@ export default function IdeaDetailScreen() {
       setTags(idea.tags || []);
       navigation.setOptions({
         title: '',
+        headerTransparent: false,
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.primary,
         headerRight: () => (
@@ -52,8 +52,6 @@ export default function IdeaDetailScreen() {
     });
     return unsubscribe;
   }, [navigation, idea]);
-
-  const insets = useSafeAreaInsets();
 
   if (!idea) return null;
 
@@ -98,7 +96,7 @@ export default function IdeaDetailScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + (Platform.OS === 'ios' ? 64 : 72) }]}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.contentContainer}>
       <TextInput
         style={[styles.titleInput, { color: colors.text }]}
         value={title}
@@ -161,7 +159,7 @@ export default function IdeaDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  contentContainer: { padding: 24, paddingBottom: 60 },
+  contentContainer: { padding: 24, paddingTop: 80, paddingBottom: 60 },
   headerAction: { fontSize: 15, fontWeight: '600' },
   titleInput: { fontSize: 26, fontWeight: '800', marginBottom: 28, paddingVertical: 4 },
   tagsSection: {},

@@ -2,19 +2,21 @@ import { Tabs } from 'expo-router';
 import { View, Text, Platform, Animated } from 'react-native';
 import { useRef, useEffect } from 'react';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { useThemeStore } from '../../store/themeStore';
 import { getColors } from '../../constants/theme';
 
-const TAB_ICONS: Record<string, string> = {
-  dashboard: '\u2302',
-  notas: 'N',
-  checklists: '\u2611',
-  ideas: '\u2606',
-  settings: '\u2261',
+const TAB_ICONS: Record<string, { focused: string; unfocused: string }> = {
+  dashboard: { focused: 'home', unfocused: 'home-outline' },
+  notas: { focused: 'document-text', unfocused: 'document-text-outline' },
+  checklists: { focused: 'checkbox', unfocused: 'checkbox-outline' },
+  ideas: { focused: 'bulb', unfocused: 'bulb-outline' },
+  settings: { focused: 'settings', unfocused: 'settings-outline' },
 };
 
 function TabIcon({ name, focused, color, bgColor }: { name: string; focused: boolean; color: string; bgColor: string }) {
   const scale = useRef(new Animated.Value(focused ? 1 : 0.85)).current;
+  const iconName = focused ? TAB_ICONS[name].focused : TAB_ICONS[name].unfocused;
 
   useEffect(() => {
     Animated.spring(scale, {
@@ -30,9 +32,9 @@ function TabIcon({ name, focused, color, bgColor }: { name: string; focused: boo
       {focused ? (
         <Animated.View style={{ position: 'absolute', width: 34, height: 28, borderRadius: 14, backgroundColor: bgColor + '20', transform: [{ scale }] }} />
       ) : null}
-      <Animated.Text style={{ fontSize: focused ? 22 : 20, fontWeight: focused ? '700' : '500', color, marginTop: -1, transform: [{ scale }] }}>
-        {TAB_ICONS[name]}
-      </Animated.Text>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Ionicons name={iconName as any} size={focused ? 24 : 22} color={color} />
+      </Animated.View>
     </View>
   );
 }
@@ -51,12 +53,12 @@ export default function TabsLayout() {
         headerTitleStyle: { fontWeight: '700', fontSize: 17 },
         tabBarStyle: {
           position: 'absolute',
-          bottom: Platform.OS === 'ios' ? 20 : 14,
+          bottom: Platform.OS === 'ios' ? 20 : 16,
           left: Platform.OS === 'ios' ? 16 : 12,
           right: Platform.OS === 'ios' ? 16 : 12,
           borderRadius: 28,
           height: Platform.OS === 'ios' ? 60 : 56,
-          paddingBottom: 4,
+          paddingBottom: Platform.OS === 'ios' ? 4 : 8,
           paddingTop: 4,
           elevation: 8,
           shadowColor: '#000',
@@ -69,9 +71,9 @@ export default function TabsLayout() {
         tabBarBackground: () => (
           Platform.OS === 'ios'
             ? <BlurView intensity={75} tint={isDarkMode ? 'dark' : 'light'} style={{ flex: 1, borderRadius: 28 }} />
-            : <View style={{ flex: 1, backgroundColor: isDarkMode ? 'rgba(26,22,50,0.6)' : 'rgba(255,255,255,0.55)', borderRadius: 28 }} />
+            : <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 28 }} />
         ),
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', letterSpacing: 0.25, marginTop: -2 },
+        tabBarLabelStyle: { fontSize: Platform.OS === 'ios' ? 10 : 11, fontWeight: '600', letterSpacing: 0.25, marginTop: -2 },
         tabBarShowLabel: true,
         tabBarIconStyle: { marginBottom: -1 },
         tabBarItemStyle: { paddingVertical: 2 },

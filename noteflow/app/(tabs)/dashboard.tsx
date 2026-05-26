@@ -10,7 +10,7 @@ import { getColors } from '../../constants/theme';
 function GlassCard({ children, intensity, style, colors: c, accentColor }: any) {
   const Card = Platform.OS === 'ios' ? BlurView : View;
   return (
-    <Card intensity={intensity || 70} tint="light" style={[styles.glassCard, { borderColor: c.border, shadowColor: accentColor || c.cardShadow }, style]}>
+    <Card intensity={intensity || 70} tint="light" style={[styles.glassCard, { borderColor: c.border, shadowColor: accentColor || c.cardShadow, ...(Platform.OS === 'android' && { backgroundColor: c.surface }) }, style]}>
       {accentColor ? <View style={[styles.cardAccent, { backgroundColor: accentColor }]} /> : null}
       {children}
     </Card>
@@ -70,7 +70,7 @@ export default function DashboardScreen() {
   ].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5);
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 100 : 120 }}>
       <View style={styles.headerSection}>
         <Text style={[styles.greeting, { color: colors.text }]}>NoteFlow</Text>
         <Text style={[styles.subtitle, { color: colors.textTertiary }]}>Resumen de tu espacio de trabajo</Text>

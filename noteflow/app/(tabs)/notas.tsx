@@ -44,7 +44,7 @@ export default function NotasScreen() {
           data={sorted}
           renderItem={({ item }) => <NoteCard note={item} onPress={() => router.push(`/notas/${item.id}` as any)} colors={colors} />}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingVertical: 16 }}
+          contentContainerStyle={{ paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 16 : 100 }}
           showsVerticalScrollIndicator={false}
         />
       )}

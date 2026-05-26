@@ -44,7 +44,7 @@ export default function IdeasScreen() {
           data={sorted}
           renderItem={({ item }) => <IdeaCard note={item} onPress={() => router.push(`/ideas/${item.id}` as any)} colors={colors} />}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingVertical: 16 }}
+          contentContainerStyle={{ paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 16 : 100 }}
           showsVerticalScrollIndicator={false}
         />
       )}

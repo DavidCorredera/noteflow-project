@@ -106,7 +106,7 @@ export default function ChecklistDetailScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior='padding'
       keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
     >
       <View style={styles.header}>
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   center: { justifyContent: 'center', alignItems: 'center' },
   notFound: { fontSize: 15 },
   headerAction: { fontSize: 15, fontWeight: '600' },
-  header: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 8 },
+  header: { paddingHorizontal: 24, paddingTop: 80, paddingBottom: 8 },
   titleInput: { fontSize: 22, fontWeight: '800', marginBottom: 4, paddingVertical: 2 },
   progressText: { fontSize: 12, marginTop: 2 },
   progressBg: { height: 4, borderRadius: 2, marginHorizontal: 24, marginBottom: 16, overflow: 'hidden' },

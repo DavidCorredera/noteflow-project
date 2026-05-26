@@ -85,7 +85,7 @@ export default function NoteDetailScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior='padding'
       keyboardVerticalOffset={Platform.OS === 'ios' ? 18 : 0}
     >
       <ScrollView
@@ -125,7 +125,7 @@ export default function NoteDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  contentContainer: { padding: 24, paddingTop: 24 },
+  contentContainer: { padding: 24, paddingTop: 80 },
   headerAction: { fontSize: 15, fontWeight: '600' },
   date: { fontSize: 12, fontWeight: '500', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   titleInput: { fontSize: 26, fontWeight: '800', marginBottom: 16, paddingVertical: 4 },

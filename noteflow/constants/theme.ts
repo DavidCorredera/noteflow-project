@@ -1,9 +1,13 @@
+import { Platform } from 'react-native';
+
+const isAndroid = Platform.OS === 'android';
+
 export const LightColors = {
   primary: '#7c3aed',
   primaryLight: '#a78bfa',
   primaryDark: '#5b21b6',
   background: '#f5f0ff',
-  surface: 'rgba(255,255,255,0.75)',
+  surface: isAndroid ? '#fcfbff' : 'rgba(255,255,255,0.75)',
   surfaceLight: '#ede6ff',
   text: '#1a1a2e',
   textSecondary: '#6b6090',
@@ -16,7 +20,7 @@ export const LightColors = {
   info: '#6366f1',
   overlay: 'rgba(124,58,237,0.06)',
   deleteBg: 'rgba(239,68,68,0.08)',
-  inputBg: 'rgba(255,255,255,0.6)',
+  inputBg: isAndroid ? '#ffffff' : 'rgba(255,255,255,0.6)',
   cardShadow: '#7c3aed',
   ideaColors: ['rgba(124,58,237,0.08)', 'rgba(167,139,250,0.10)', 'rgba(196,181,253,0.12)', 'rgba(221,214,254,0.15)', 'rgba(237,233,254,0.18)'],
 };
@@ -26,7 +30,7 @@ export const DarkColors = {
   primaryLight: '#c4b5fd',
   primaryDark: '#7c3aed',
   background: '#0d0b1a',
-  surface: 'rgba(26,22,50,0.8)',
+  surface: isAndroid ? '#17132d' : 'rgba(26,22,50,0.8)',
   surfaceLight: '#1a1638',
   text: '#e8e4f5',
   textSecondary: '#9a90b8',
@@ -39,7 +43,7 @@ export const DarkColors = {
   info: '#818cf8',
   overlay: 'rgba(167,139,250,0.06)',
   deleteBg: 'rgba(248,113,113,0.1)',
-  inputBg: 'rgba(26,22,50,0.6)',
+  inputBg: isAndroid ? '#1a1638' : 'rgba(26,22,50,0.6)',
   cardShadow: '#a78bfa',
   ideaColors: ['rgba(167,139,250,0.08)', 'rgba(196,181,253,0.06)', 'rgba(124,58,237,0.10)', 'rgba(167,139,250,0.12)', 'rgba(196,181,253,0.08)'],
 };

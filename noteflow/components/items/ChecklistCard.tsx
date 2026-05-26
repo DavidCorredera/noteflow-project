@@ -18,7 +18,7 @@ export default function ChecklistCard({ note, onPress, colors }: Props) {
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <Card intensity={60} tint="light" style={[styles.card, { borderColor: colors.border, shadowColor: colors.cardShadow }]}>
+      <Card intensity={60} tint="light" style={[styles.card, { borderColor: colors.border, shadowColor: colors.cardShadow, ...(Platform.OS === 'android' && { backgroundColor: colors.surface }) }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{note.title}</Text>
           <Text style={[styles.count, { color: colors.primary }]}>{completedItems}/{totalItems}</Text>
