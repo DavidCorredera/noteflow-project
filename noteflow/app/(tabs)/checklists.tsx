@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, RefreshControl } from 'react-native';
 import { Spinner } from '@gluestack-ui/themed';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,10 @@ import { useNotesStore } from '../../store/notesStore';
 import { useThemeStore } from '../../store/themeStore';
 import { getColors } from '../../constants/theme';
 import ChecklistCard from '../../components/items/ChecklistCard';
+import SwipeableRow from '../../components/SwipeableRow';
+import ScreenHeader from '../../components/ScreenHeader';
+import { useLocaleStore } from '../../store/localeStore';
+import { t } from '../../i18n';
 
 export default function ChecklistsScreen() {
   const router = useRouter();
@@ -15,53 +19,95 @@ export default function ChecklistsScreen() {
   const colors = getColors(isDarkMode);
   const checklists = useNotesStore((s) => s.checklists);
   const deleteNote = useNotesStore((s) => s.deleteNote);
+  const archiveNote = useNotesStore((s) => s.archiveNote);
+  const restoreNote = useNotesStore((s) => s.restoreNote);
   const fetchNotes = useNotesStore((s) => s.fetchNotes);
   const isLoading = useNotesStore((s) => s.isLoading);
   const error = useNotesStore((s) => s.error);
+  const locale = useLocaleStore((s) => s.locale);
+  const [showArchived, setShowArchived] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => { fetchNotes(); }, []);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchNotes();
+    setRefreshing(false);
+  }, [fetchNotes]);
 
-  const sorted = useMemo(() => {
-    const copy = [...checklists];
-    if (sortBy === 'oldest') return copy.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
-    if (sortBy === 'alpha') return copy.sort((a, b) => a.title.localeCompare(b.title));
-    return copy.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const active = useMemo(() => {
+    const filtered = checklists.filter((n) => !n.archived);
+    if (sortBy === 'oldest') return [...filtered].sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+    if (sortBy === 'alpha') return [...filtered].sort((a, b) => a.title.localeCompare(b.title));
+    return [...filtered].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [checklists, sortBy]);
 
-  const handleMenu = (id: string, title: string) => {
-    Alert.alert(title, undefined, [
-      { text: 'Archivar', style: 'default', onPress: () => {} },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteNote(id) },
-      { text: 'Cancelar', style: 'cancel' },
-    ]);
-  };
+  const archived = useMemo(() => {
+    const filtered = checklists.filter((n) => n.archived);
+    if (sortBy === 'oldest') return [...filtered].sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+    if (sortBy === 'alpha') return [...filtered].sort((a, b) => a.title.localeCompare(b.title));
+    return [...filtered].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [checklists, sortBy]);
+
+  const source = showArchived ? archived : active;
+  const isEmpty = source.length === 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenHeader title={t(locale, 'tabs.checklists')} colors={colors} />
+      {showArchived && (
+        <TouchableOpacity style={styles.backBar} onPress={() => setShowArchived(false)} activeOpacity={0.7}>
+          <Text style={[styles.backArrow, { color: colors.primary }]}>{'←'}</Text>
+          <Text style={[styles.backText, { color: colors.primary }]}>{t(locale, 'checklistsList.noArchived')}</Text>
+        </TouchableOpacity>
+      )}
+
       {isLoading ? (
         <View style={styles.center}><Spinner color={colors.primary} size="large" /></View>
       ) : error ? (
         <View style={styles.center}><Text style={[styles.errorText, { color: colors.error }]}>Error: {error}</Text></View>
-      ) : sorted.length === 0 ? (
+      ) : isEmpty && showArchived ? (
         <View style={styles.center}>
           <Text style={[styles.emptyIcon, { color: colors.textTertiary }]}>T</Text>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Sin tareas</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>Crea tu primera lista de tareas</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>{t(locale, 'checklistsList.noArchived')}</Text>
+        </View>
+      ) : isEmpty ? (
+        <View style={styles.center}>
+          <Text style={[styles.emptyIcon, { color: colors.textTertiary }]}>T</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>{t(locale, 'checklistsList.empty')}</Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>{t(locale, 'checklistsList.emptyDesc')}</Text>
         </View>
       ) : (
         <FlashList
-          data={sorted}
-          renderItem={({ item }) => (
-            <View style={styles.cardWrapper}>
-              <ChecklistCard note={item} onPress={() => router.push(`/checklists/${item.id}` as any)} colors={colors} />
-              <TouchableOpacity style={styles.menuBtn} onPress={() => handleMenu(item.id, item.title)}>
-                <Text style={[styles.menuDots, { color: colors.textTertiary }]}>{'\u22EE'}</Text>
-              </TouchableOpacity>
+          data={source}
+          renderItem={({ item: checklist }) => (
+            <View style={{ marginHorizontal: 20, marginBottom: 10 }}>
+              <SwipeableRow
+                variant="icons-horizontal"
+                archived={!!checklist.archived}
+                onArchive={() => archiveNote(checklist.id)}
+                onRestore={() => restoreNote(checklist.id)}
+                onDelete={() => deleteNote(checklist.id)}
+                onEdit={() => router.push(`/checklists/${checklist.id}` as any)}
+                colors={colors}
+              >
+                <ChecklistCard note={checklist} onPress={() => router.push(`/checklists/${checklist.id}` as any)} colors={colors} mode="full" />
+              </SwipeableRow>
             </View>
           )}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 16 : 100 }}
+          ListHeaderComponent={
+            !showArchived && archived.length > 0 ? (
+              <TouchableOpacity style={styles.archivedBar} onPress={() => setShowArchived(true)} activeOpacity={0.7}>
+                <Text style={[styles.archivedBarText, { color: colors.primary }]}>{t(locale, 'checklistsList.noArchived')}</Text>
+                <View style={[styles.archivedBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.archivedBadgeText}>{archived.length}</Text>
+                </View>
+              </TouchableOpacity>
+            ) : null
+          }
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 16 : 100 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         />
       )}
       <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]} onPress={() => router.push('/nueva-nota?type=checklist' as any)} activeOpacity={0.8}>
@@ -78,9 +124,13 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 44, fontWeight: '800', marginBottom: 16, opacity: 0.25 },
   emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
   emptySubtitle: { fontSize: 14, textAlign: 'center', opacity: 0.7 },
-  cardWrapper: { position: 'relative' },
-  menuBtn: { position: 'absolute', right: 28, top: 6, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  menuDots: { fontSize: 18, fontWeight: '700' },
+  backBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 6 },
+  backArrow: { fontSize: 22, fontWeight: '600' },
+  backText: { fontSize: 15, fontWeight: '600' },
+  archivedBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4, gap: 8 },
+  archivedBarText: { fontSize: 14, fontWeight: '600' },
+  archivedBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  archivedBadgeText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   fab: {
     position: 'absolute', right: 24, bottom: Platform.OS === 'ios' ? 100 : 90, width: 52, height: 52, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',

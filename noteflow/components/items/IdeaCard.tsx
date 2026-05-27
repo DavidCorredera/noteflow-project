@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { IdeaNote } from '../../types';
 import { AppColors } from '../../constants/theme';
 
@@ -10,12 +11,31 @@ interface Props {
   colors: AppColors;
 }
 
+const PREVIEW_LENGTH = 80;
+
 export default function IdeaCard({ note, onPress, colors }: Props) {
   const Card = Platform.OS === 'ios' ? BlurView : View;
+  const accentColor = note.color || colors.primary;
+
+  const preview = note.content
+    ? note.content.length > PREVIEW_LENGTH
+      ? note.content.slice(0, PREVIEW_LENGTH) + '...'
+      : note.content
+    : null;
+
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <Card intensity={60} tint="light" style={[styles.card, { borderColor: colors.border, shadowColor: colors.cardShadow, ...(Platform.OS === 'android' && { backgroundColor: colors.surface }) }]}>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{note.title}</Text>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.touchable}>
+      <Card intensity={60} tint="light" style={[styles.card, { borderColor: colors.borderLight, shadowColor: colors.cardShadow, backgroundColor: colors.surface }]}>
+        <View style={[styles.accentLine, { backgroundColor: accentColor }]} />
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={3}>{note.title}</Text>
+          {note.pinned && (
+            <Ionicons name="pin" size={14} color={accentColor} style={styles.pinIcon} />
+          )}
+        </View>
+        {preview && (
+          <Text style={[styles.preview, { color: colors.textTertiary }]} numberOfLines={2}>{preview}</Text>
+        )}
         {note.tags.length > 0 && (
           <View style={styles.tagsContainer}>
             {note.tags.map((tag, idx) => (
@@ -31,13 +51,18 @@ export default function IdeaCard({ note, onPress, colors }: Props) {
 }
 
 const styles = StyleSheet.create({
+  touchable: { flex: 1 },
   card: {
-    borderRadius: 16, padding: 16, marginHorizontal: 20, marginBottom: 10,
-    borderWidth: 1, overflow: 'hidden',
-    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 3,
+    borderRadius: 14, padding: 14, aspectRatio: 1, borderWidth: 1,
+    shadowOffset: { width: 4, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4,
+    overflow: 'hidden',
   },
-  title: { fontSize: 15, fontWeight: '700' },
-  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 6 },
-  tag: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  accentLine: { height: 3, borderRadius: 2, marginBottom: 10, opacity: 0.5 },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  title: { flex: 1, fontSize: 16, fontWeight: '700', lineHeight: 20 },
+  pinIcon: { marginLeft: 4, marginTop: 2 },
+  preview: { fontSize: 13, lineHeight: 17, marginTop: 6, opacity: 0.7 },
+  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 'auto', paddingTop: 10, gap: 6 },
+  tag: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
   tagText: { fontSize: 11, fontWeight: '600' },
 });

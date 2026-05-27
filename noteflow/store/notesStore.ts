@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { Note, ChecklistNote, IdeaNote, ChecklistItem } from '../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ItemPriority, Note, ChecklistNote, IdeaNote, ChecklistItem } from '../types';
 import {
   getNotes,
   createNote,
@@ -11,13 +12,32 @@ import {
   updateNoteApi,
 } from '../lib/api';
 
+const PRIORITY_STORAGE_KEY = 'noteflow_priorities';
+
+async function loadPriorities(): Promise<Record<string, ItemPriority>> {
+  try {
+    const raw = await AsyncStorage.getItem(PRIORITY_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function savePriorities(priorities: Record<string, ItemPriority>) {
+  try {
+    await AsyncStorage.setItem(PRIORITY_STORAGE_KEY, JSON.stringify(priorities));
+  } catch {}
+}
+
 type NewNoteInput = Pick<Note, 'title' | 'content'>;
-type NewChecklistInput = Pick<ChecklistNote, 'title'> & { items?: string[] };
-type NewIdeaInput = Pick<IdeaNote, 'title' | 'tags'> & Partial<Pick<IdeaNote, 'color'>>;
+type NewChecklistInput = Pick<ChecklistNote, 'title'> & { items?: { text: string; priority?: ItemPriority }[] };
+type NewIdeaInput = Pick<IdeaNote, 'title' | 'tags'> & Partial<Pick<IdeaNote, 'color' | 'content' | 'pinned'>>;
 
 const normalizeChecklistItem = (item: any): ChecklistItem => ({
   ...item,
   isCompleted: item.isCompleted ?? item.is_completed ?? false,
+  priority: item.priority ?? 'none',
+  dueDate: item.dueDate ?? item.due_date ?? undefined,
 });
 
 const normalizeNote = (note: any) => ({
@@ -40,10 +60,13 @@ interface NotesStore {
   addChecklist: (note: NewChecklistInput) => Promise<void>;
   addIdea: (note: NewIdeaInput) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
-  toggleChecklistItem: (checklistId: string, itemId: string, currentStatus: boolean) => Promise<void>;
-  addChecklistItem: (checklistId: string, text: string) => Promise<void>;
+  archiveNote: (id: string) => Promise<void>;
+  restoreNote: (id: string) => Promise<void>;
+  toggleChecklistItem: (checklistId: string, itemId: string, currentStatus: boolean) => void;
+  addChecklistItem: (checklistId: string, text: string, priority?: ItemPriority) => Promise<void>;
   deleteChecklistItem: (checklistId: string, itemId: string) => Promise<void>;
   updateChecklistItem: (checklistId: string, itemId: string, text: string) => Promise<void>;
+  updateItemPriority: (checklistId: string, itemId: string, priority: ItemPriority) => void;
   updateNote: (id: string, data: Partial<Note>) => Promise<void>;
   updateIdea: (id: string, data: Partial<IdeaNote>) => Promise<void>;
   updateChecklist: (id: string, data: Partial<ChecklistNote>) => Promise<void>;
@@ -59,14 +82,26 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   fetchNotes: async () => {
     set({ isLoading: true, error: null });
     try {
+      const savedPriorities = await loadPriorities();
+
       const allNotes = await getNotes();
-      const formattedNotes = allNotes.map((n: any) => normalizeNote(n));
+      const formattedNotes = allNotes.map((n: any) => {
+        const normalized = normalizeNote(n);
+        if (n.type === 'checklist' && n.items) {
+          normalized.items = normalized.items.map((item: any) => {
+            const sp = savedPriorities[item.id];
+            return sp ? { ...item, priority: sp } : item;
+          });
+        }
+        return normalized;
+      });
 
       set({
         notes: formattedNotes.filter((n: any) => n.type === 'note'),
         checklists: formattedNotes.filter((n: any) => n.type === 'checklist'),
         ideas: formattedNotes.filter((n: any) => n.type === 'idea'),
         isLoading: false,
+        error: null,
       });
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
@@ -88,20 +123,27 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     try {
       const res = await createNote({ title: note.title, type: 'checklist' });
       let newChecklist = normalizeNote(res);
-      const itemTexts = (note.items ?? []).map((item) => item.trim()).filter(Boolean);
+      const itemList = (note.items ?? []).map((item) => typeof item === 'string' ? { text: item, priority: undefined } : item).filter((i) => i.text.trim());
       let partialSaveError: string | null = null;
 
-      if (itemTexts.length > 0) {
+      if (itemList.length > 0) {
         const createdItems: ChecklistItem[] = [];
+        const savedPriorities: Record<string, ItemPriority> = {};
 
-        for (const text of itemTexts) {
+        for (const item of itemList) {
           try {
-            const createdItem = await addChecklistItemApi(newChecklist.id, text);
+            const createdItem = await addChecklistItemApi(newChecklist.id, item.text, item.priority);
+            if (item.priority && item.priority !== 'none') savedPriorities[createdItem.id] = item.priority;
             createdItems.push(normalizeChecklistItem(createdItem));
           } catch (error) {
             partialSaveError = 'La tarea se creo, pero no se pudieron guardar todas sus subtareas.';
             break;
           }
+        }
+
+        if (Object.keys(savedPriorities).length > 0) {
+          const existing = await loadPriorities();
+          savePriorities({ ...existing, ...savedPriorities });
         }
 
         newChecklist = { ...newChecklist, items: createdItems };
@@ -139,9 +181,40 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }
   },
 
-  addChecklistItem: async (checklistId, text) => {
+  archiveNote: async (id) => {
     try {
-      const newItem = await addChecklistItemApi(checklistId, text);
+      await updateNoteApi(id, { archived: true });
+      set((state) => ({
+        notes: state.notes.map((n) => n.id === id ? { ...n, archived: true } : n),
+        checklists: state.checklists.map((c) => c.id === id ? { ...c, archived: true } : c),
+        ideas: state.ideas.map((i) => i.id === id ? { ...i, archived: true } : i),
+      }));
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  restoreNote: async (id) => {
+    try {
+      await updateNoteApi(id, { archived: false });
+      set((state) => ({
+        notes: state.notes.map((n) => n.id === id ? { ...n, archived: false } : n),
+        checklists: state.checklists.map((c) => c.id === id ? { ...c, archived: false } : c),
+        ideas: state.ideas.map((i) => i.id === id ? { ...i, archived: false } : i),
+      }));
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  addChecklistItem: async (checklistId, text, priority) => {
+    try {
+      const newItem = await addChecklistItemApi(checklistId, text, priority);
+      if (priority && priority !== 'none') {
+        const saved = await loadPriorities();
+        saved[newItem.id] = priority;
+        savePriorities(saved);
+      }
       set((state) => ({
         checklists: state.checklists.map((c) =>
           c.id === checklistId
@@ -157,6 +230,11 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   deleteChecklistItem: async (checklistId, itemId) => {
     try {
       await deleteChecklistItemApi(itemId);
+      const saved = await loadPriorities();
+      if (saved[itemId]) {
+        delete saved[itemId];
+        savePriorities(saved);
+      }
       set((state) => ({
         checklists: state.checklists.map((c) =>
           c.id === checklistId
@@ -171,7 +249,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   updateChecklistItem: async (checklistId, itemId, text) => {
     try {
-      await updateChecklistItemApi(itemId, text);
+      await updateChecklistItemApi(itemId, { text });
       set((state) => ({
         checklists: state.checklists.map((c) =>
           c.id === checklistId
@@ -184,40 +262,61 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }
   },
 
+  updateItemPriority: (checklistId, itemId, priority) => {
+    set((state) => {
+      const priorities: Record<string, ItemPriority> = {};
+      for (const c of state.checklists) {
+        for (const i of c.items) {
+          if (i.priority && i.priority !== 'none' && i.id !== itemId) priorities[i.id] = i.priority;
+        }
+      }
+      if (priority !== 'none') priorities[itemId] = priority;
+      savePriorities(priorities);
+      return {
+        checklists: state.checklists.map((c) =>
+          c.id === checklistId
+            ? { ...c, items: (c.items || []).map((i) => i.id === itemId ? { ...i, priority } : i) }
+            : c
+        ),
+      };
+    });
+    updateChecklistItemApi(itemId, { priority }).catch(() => {});
+  },
+
   updateNote: async (id, data) => {
+    set((state) => ({
+      notes: state.notes.map((n) => (n.id === id ? { ...n, ...data } : n)),
+    }));
     try {
-      const updated = normalizeNote(await updateNoteApi(id, data));
-      set((state) => ({
-        notes: state.notes.map((n) => (n.id === id ? { ...n, ...updated, ...data } : n)),
-      }));
+      await updateNoteApi(id, data);
     } catch (error: any) {
       set({ error: error.message });
     }
   },
 
   updateIdea: async (id, data) => {
+    set((state) => ({
+      ideas: state.ideas.map((i) => (i.id === id ? { ...i, ...data } : i)),
+    }));
     try {
-      const updated = normalizeNote(await updateNoteApi(id, data));
-      set((state) => ({
-        ideas: state.ideas.map((i) => (i.id === id ? { ...i, ...updated, ...data } : i)),
-      }));
+      await updateNoteApi(id, data);
     } catch (error: any) {
       set({ error: error.message });
     }
   },
 
   updateChecklist: async (id, data) => {
+    set((state) => ({
+      checklists: state.checklists.map((c) => (c.id === id ? { ...c, ...data } : c)),
+    }));
     try {
-      const updated = normalizeNote(await updateNoteApi(id, data));
-      set((state) => ({
-        checklists: state.checklists.map((c) => (c.id === id ? { ...c, ...updated, ...data } : c)),
-      }));
+      await updateNoteApi(id, data);
     } catch (error: any) {
       set({ error: error.message });
     }
   },
 
-  toggleChecklistItem: async (checklistId, itemId, currentStatus) => {
+  toggleChecklistItem: (checklistId, itemId, currentStatus) => {
     set((state) => ({
       checklists: state.checklists.map((c) =>
         c.id === checklistId
@@ -230,12 +329,6 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
           : c
       ),
     }));
-
-    try {
-      await toggleChecklistItemApi(itemId, !currentStatus);
-    } catch (error: any) {
-      get().fetchNotes();
-      set({ error: error.message });
-    }
+    toggleChecklistItemApi(itemId, !currentStatus).catch(() => {});
   },
 }));

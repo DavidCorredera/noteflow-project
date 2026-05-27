@@ -10,6 +10,7 @@ interface Props {
   sketch: NoteSketch;
   strokeColor?: string;
   strokeWidth?: number;
+  eraser?: boolean;
   onDrawStart?: () => void;
   onDrawEnd?: () => void;
   onChange?: (nextSketch: NoteSketch) => void;
@@ -40,6 +41,7 @@ export default function SketchCanvas({
   sketch,
   strokeColor = colors.primary,
   strokeWidth = 3,
+  eraser = false,
   onDrawStart,
   onDrawEnd,
   onChange,
@@ -47,6 +49,9 @@ export default function SketchCanvas({
   const [canvasWidth, setCanvasWidth] = useState(1);
   const [draftPoints, setDraftPoints] = useState<NoteSketchPoint[]>([]);
   const lastPointRef = useRef<NoteSketchPoint | null>(null);
+
+  const effectiveWidth = eraser ? Math.max(strokeWidth * 1.5, 10) : strokeWidth;
+  const effectiveColor = eraser ? colors.surface : strokeColor;
 
   const commitStroke = () => {
     onDrawEnd?.();
@@ -57,8 +62,8 @@ export default function SketchCanvas({
 
     const nextStroke: NoteSketchStroke = {
       id: createNoteEntityId('stroke'),
-      color: strokeColor,
-      width: strokeWidth,
+      color: effectiveColor,
+      width: effectiveWidth,
       points: draftPoints,
     };
 
@@ -114,13 +119,18 @@ export default function SketchCanvas({
       style={[
         styles.canvasShell,
         {
-          borderColor: colors.border,
+          borderColor: eraser ? colors.warning + '60' : colors.border,
           backgroundColor: colors.surface,
         },
       ]}
       onLayout={(event) => setCanvasWidth(Math.max(1, event.nativeEvent.layout.width))}
       {...panResponder.panHandlers}
     >
+      {eraser && !readOnly ? (
+        <View style={styles.eraserBadge} pointerEvents="none">
+          <Text style={[styles.eraserBadgeText, { color: colors.warning }]}>Borrador</Text>
+        </View>
+      ) : null}
       <Svg width="100%" height={CANVAS_HEIGHT} style={styles.canvasSvg}>
         {sketch.strokes.map((stroke) =>
           stroke.points.length > 1 ? (
@@ -146,16 +156,28 @@ export default function SketchCanvas({
           <Path
             d={buildPath(draftPoints, canvasWidth, CANVAS_HEIGHT)}
             fill="none"
-            stroke={strokeColor}
+            stroke={effectiveColor}
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth={strokeWidth}
+            strokeWidth={effectiveWidth}
           />
         ) : draftPoints[0] ? (
           <Circle
             {...renderSinglePoint(draftPoints[0], canvasWidth, CANVAS_HEIGHT)}
-            fill={strokeColor}
-            r={Math.max(2, strokeWidth)}
+            fill={effectiveColor}
+            r={Math.max(2, effectiveWidth)}
+          />
+        ) : null}
+
+        {eraser && draftPoints.length > 0 ? (
+          <Circle
+            cx={draftPoints[draftPoints.length - 1].x * canvasWidth}
+            cy={draftPoints[draftPoints.length - 1].y * CANVAS_HEIGHT}
+            r={effectiveWidth / 2}
+            fill="transparent"
+            stroke={colors.textTertiary}
+            strokeWidth={1.5}
+            strokeDasharray="3,3"
           />
         ) : null}
       </Svg>
@@ -189,5 +211,19 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  eraserBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    zIndex: 5,
+  },
+  eraserBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

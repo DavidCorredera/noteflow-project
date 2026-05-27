@@ -1,13 +1,17 @@
-import { Fragment, type ReactNode } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Fragment, useState, type ReactNode } from 'react';
+import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AppColors } from '../../constants/theme';
-import { NOTE_INDEX_TOKEN, NoteSketch, buildIndexPreview, extractHeadings } from '../../lib/noteContent';
+import { NOTE_INDEX_TOKEN, NoteImage, NoteSketch, buildIndexPreview, extractHeadings } from '../../lib/noteContent';
+import { useLocaleStore } from '../../store/localeStore';
+import { Locale, t } from '../../i18n';
+import ImageViewer from '../ImageViewer';
 import SketchCanvas from './SketchCanvas';
 
 interface Props {
   body: string;
   colors: AppColors;
   sketches?: NoteSketch[];
+  images?: NoteImage[];
 }
 
 function renderInline(text: string, colors: AppColors) {
@@ -48,12 +52,12 @@ function renderInline(text: string, colors: AppColors) {
   });
 }
 
-function renderIndexBlock(body: string, colors: AppColors) {
+function renderIndexBlock(body: string, colors: AppColors, locale: Locale) {
   const headings = buildIndexPreview(extractHeadings(body));
 
   return (
     <View style={[styles.indexBlock, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-      <Text style={[styles.indexTitle, { color: colors.text }]}>Indice</Text>
+      <Text style={[styles.indexTitle, { color: colors.text }]}>{t(locale, 'notas.indexTitle')}</Text>
       {headings.length > 0 ? (
         headings.map((heading) => (
           <Text key={`${heading.line}-${heading.title}`} style={[styles.indexItem, { color: colors.textSecondary }]}>
@@ -61,13 +65,15 @@ function renderIndexBlock(body: string, colors: AppColors) {
           </Text>
         ))
       ) : (
-        <Text style={[styles.indexItem, { color: colors.textTertiary }]}>Anade encabezados H1, H2 o H3 para generar el indice.</Text>
+        <Text style={[styles.indexItem, { color: colors.textTertiary }]}>{t(locale, 'notas.indexEmpty')}</Text>
       )}
     </View>
   );
 }
 
-export default function NoteMarkdown({ body, colors, sketches = [] }: Props) {
+export default function NoteMarkdown({ body, colors, sketches = [], images = [] }: Props) {
+  const locale = useLocaleStore((s) => s.locale);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
   const lines = body.split(/\r?\n/);
   const blocks: ReactNode[] = [];
   const fencedLines: string[] = [];
@@ -102,7 +108,7 @@ export default function NoteMarkdown({ body, colors, sketches = [] }: Props) {
     }
 
     if (trimmed === NOTE_INDEX_TOKEN) {
-      blocks.push(<Fragment key={`index-${index}`}>{renderIndexBlock(body, colors)}</Fragment>);
+      blocks.push(<Fragment key={`index-${index}`}>{renderIndexBlock(body, colors, locale)}</Fragment>);
       return;
     }
 
@@ -199,21 +205,42 @@ export default function NoteMarkdown({ body, colors, sketches = [] }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      {blocks.length > 0 ? blocks : <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No hay contenido todavia.</Text>}
+    <>
+      <View style={styles.container}>
+        {blocks.length > 0 ? blocks : <Text style={[styles.emptyText, { color: colors.textTertiary }]}>{t(locale, 'notas.previewEmpty')}</Text>}
 
-      {sketches.length > 0 ? (
-        <View style={styles.sketchSection}>
-          <Text style={[styles.sketchTitle, { color: colors.text }]}>Lienzos</Text>
-          {sketches.map((sketch) => (
-            <View key={sketch.id} style={styles.sketchCard}>
-              <Text style={[styles.sketchLabel, { color: colors.textSecondary }]}>{sketch.title}</Text>
-              <SketchCanvas colors={colors} readOnly sketch={sketch} />
+        {images.length > 0 ? (
+          <View style={styles.sketchSection}>
+            <Text style={[styles.sketchTitle, { color: colors.text }]}>{t(locale, 'notas.imagesTitle')}</Text>
+            <View style={{ gap: 10 }}>
+              {images.map((img) => (
+                <TouchableOpacity key={img.id} onPress={() => setViewerUri(img.uri)} activeOpacity={0.85}>
+                  <Image
+                    source={{ uri: img.uri }}
+                    style={{ width: '100%', height: 200, borderRadius: 12 }}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ))}
             </View>
-          ))}
-        </View>
-      ) : null}
-    </View>
+          </View>
+        ) : null}
+        {sketches.length > 0 ? (
+          <View style={styles.sketchSection}>
+            <Text style={[styles.sketchTitle, { color: colors.text }]}>{t(locale, 'notas.sketchesTitle')}</Text>
+            {sketches.map((sketch) => (
+              <View key={sketch.id} style={styles.sketchCard}>
+                <Text style={[styles.sketchLabel, { color: colors.textSecondary }]}>{sketch.title}</Text>
+                <SketchCanvas colors={colors} readOnly sketch={sketch} />
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+      {viewerUri && (
+        <ImageViewer visible={!!viewerUri} uri={viewerUri} onClose={() => setViewerUri(null)} />
+      )}
+    </>
   );
 }
 

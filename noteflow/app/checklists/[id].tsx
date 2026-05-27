@@ -1,28 +1,57 @@
-import { useState, useLayoutEffect, useEffect, useRef } from 'react';
+import { useState, useLayoutEffect, useEffect, useRef, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, FlatList, TouchableOpacity, Alert, Platform, KeyboardAvoidingView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import Svg, { Circle } from 'react-native-svg';
 import { useNotesStore } from '../../store/notesStore';
 import { useThemeStore } from '../../store/themeStore';
 import { getColors } from '../../constants/theme';
+import { ItemPriority } from '../../types';
+import { useLocaleStore } from '../../store/localeStore';
+import { t } from '../../i18n';
+
+const PRIORITY_CYCLES: ItemPriority[] = ['none', 'low', 'medium', 'high'];
+const PRIORITY_ICONS: Record<ItemPriority, keyof typeof Ionicons.glyphMap> = {
+  none: 'remove-outline',
+  low: 'arrow-down-outline',
+  medium: 'remove-outline',
+  high: 'arrow-up-outline',
+};
+const PRIORITY_COLORS: Record<ItemPriority, string> = {
+  none: '#9ca3af',
+  low: '#22c55e',
+  medium: '#f59e0b',
+  high: '#ef4444',
+};
+
+function nextPriority(p: ItemPriority): ItemPriority {
+  return PRIORITY_CYCLES[(PRIORITY_CYCLES.indexOf(p) + 1) % PRIORITY_CYCLES.length];
+}
 
 export default function ChecklistDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
+  const locale = useLocaleStore((s) => s.locale);
   const colors = getColors(isDarkMode);
   const checklist = useNotesStore(s => s.checklists.find(c => c.id === id));
   const toggleItem = useNotesStore(s => s.toggleChecklistItem);
   const addItem = useNotesStore(s => s.addChecklistItem);
   const deleteItem = useNotesStore(s => s.deleteChecklistItem);
   const updateItem = useNotesStore(s => s.updateChecklistItem);
+  const updateItemPriority = useNotesStore(s => s.updateItemPriority);
   const deleteNote = useNotesStore(s => s.deleteNote);
   const updateChecklist = useNotesStore(s => s.updateChecklist);
-  const [newItemText, setNewItemText] = useState('');
+
   const [title, setTitle] = useState('');
+  const [newItemText, setNewItemText] = useState('');
+  const [newPriority, setNewPriority] = useState<ItemPriority>('none');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItemText, setEditingItemText] = useState('');
+  const [filter, setFilter] = useState<'all' | 'active' | 'done'>('all');
   const editInputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList>(null);
   const hasTitleChanges = useRef(false);
@@ -38,7 +67,7 @@ export default function ChecklistDetailScreen() {
         headerTintColor: colors.primary,
         headerRight: () => (
           <TouchableOpacity onPress={handleDelete} style={{ paddingHorizontal: 12 }}>
-            <Text style={[styles.headerAction, { color: colors.error }]}>Eliminar</Text>
+            <Text style={[styles.headerAction, { color: colors.error }]}>{t(locale, 'common.delete')}</Text>
           </TouchableOpacity>
         ),
       });
@@ -56,33 +85,30 @@ export default function ChecklistDetailScreen() {
     return unsubscribe;
   }, [navigation, checklist]);
 
-  const insets = useSafeAreaInsets();
-
   if (!checklist) {
     return (
       <View style={[styles.container, styles.center, { backgroundColor: colors.background }]}>
-        <Text style={[styles.notFound, { color: colors.textTertiary }]}>No se encontro la tarea.</Text>
+        <Text style={[styles.notFound, { color: colors.textTertiary }]}>{t(locale, 'checklist.notFound')}</Text>
       </View>
     );
   }
 
+  const handleDelete = () => {
+    Alert.alert(t(locale, 'common.delete') + ' tarea', t(locale, 'common.confirmDelete'), [
+      { text: t(locale, 'common.cancel'), style: 'cancel' },
+      { text: t(locale, 'common.delete'), style: 'destructive', onPress: () => { deleteNote(checklist.id); router.back(); } },
+    ]);
+  };
+
   const handleAddItem = async () => {
     const trimmedText = newItemText.trim();
     if (!trimmedText) return;
-
     setNewItemText('');
-    await addItem(checklist.id, trimmedText);
-
+    setNewPriority('none');
+    await addItem(checklist.id, trimmedText, newPriority);
     requestAnimationFrame(() => {
       listRef.current?.scrollToEnd({ animated: true });
     });
-  };
-
-  const handleDelete = () => {
-    Alert.alert('Eliminar tarea', 'Esta accion no se puede deshacer.', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => { deleteNote(checklist.id); router.back(); } },
-    ]);
   };
 
   const handleStartEditItem = (itemId: string, currentText: string) => {
@@ -90,6 +116,7 @@ export default function ChecklistDetailScreen() {
     setEditingItemText(currentText);
     setTimeout(() => editInputRef.current?.focus(), 50);
   };
+
   const handleFinishEditItem = () => {
     if (editingItemId && editingItemText.trim()) {
       updateItem(checklist.id, editingItemId, editingItemText.trim());
@@ -101,7 +128,23 @@ export default function ChecklistDetailScreen() {
   const totalItems = checklist.items.length;
   const completedItems = checklist.items.filter(i => i.isCompleted).length;
   const progress = totalItems === 0 ? 0 : completedItems / totalItems;
+  const progressPercent = Math.round(progress * 100);
   const bottomInset = Math.max(12, insets.bottom);
+  const ringSize = 80;
+  const ringStroke = 7;
+  const ringRadius = (ringSize - ringStroke) / 2;
+  const ringCirc = 2 * Math.PI * ringRadius;
+  const ringOffset = ringCirc * (1 - progress);
+
+  const filteredItems = useMemo(() => {
+    const items = checklist.items;
+    if (filter === 'active') return items.filter(i => !i.isCompleted);
+    if (filter === 'done') return items.filter(i => i.isCompleted);
+    return items;
+  }, [checklist.items, filter]);
+
+  const highCount = checklist.items.filter(i => i.priority === 'high').length;
+  const overdueCount = 0;
 
   return (
     <KeyboardAvoidingView
@@ -109,76 +152,191 @@ export default function ChecklistDetailScreen() {
       behavior='padding'
       keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
     >
+      {/* Header */}
       <View style={styles.header}>
-        <TextInput
+        <TextInput autoCapitalize="none" autoCorrect={false}
           style={[styles.titleInput, { color: colors.text }]}
           value={title}
           onChangeText={(t) => { setTitle(t); hasTitleChanges.current = true; }}
           placeholderTextColor={colors.textTertiary}
+          placeholder={t(locale, 'checklist.placeholder')}
         />
-        {totalItems > 0 && <Text style={[styles.progressText, { color: colors.textTertiary }]}>{completedItems} de {totalItems}</Text>}
+
+        {totalItems > 0 && (
+          <View style={styles.statsRow}>
+            <View style={styles.ringContainer}>
+              <Svg width={ringSize} height={ringSize}>
+                <Circle cx={ringSize / 2} cy={ringSize / 2} r={ringRadius} stroke={colors.borderLight} strokeWidth={ringStroke} fill="none" />
+                <Circle
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={ringRadius}
+                  stroke={colors.primary}
+                  strokeWidth={ringStroke}
+                  fill="none"
+                  strokeDasharray={ringCirc}
+                  strokeDashoffset={ringOffset}
+                  strokeLinecap="round"
+                  transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+                />
+              </Svg>
+              <Text style={[styles.ringText, { color: colors.text }]}>{progressPercent}%</Text>
+            </View>
+            <View style={styles.statsTextCol}>
+              <Text style={[styles.statsBig, { color: colors.text }]}>{completedItems}/{totalItems}</Text>
+              <Text style={[styles.statsSmall, { color: colors.textTertiary }]}>{t(locale, 'checklist.completed')}</Text>
+              <View style={styles.statsBadgeRow}>
+                {highCount > 0 && (
+                  <View style={[styles.statBadge, { backgroundColor: '#ef444418' }]}>
+                    <Text style={[styles.statBadgeText, { color: '#ef4444' }]}>{highCount} {t(locale, highCount > 1 ? 'checklist.highPlural' : 'checklist.high')}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
       </View>
+
+      {/* Filter tabs */}
       {totalItems > 0 && (
-        <View style={[styles.progressBg, { backgroundColor: colors.borderLight }]}>
-          <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${progress * 100}%` }]} />
+        <View style={[styles.filterSegmented, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+          {(['all', 'active', 'done'] as const).map((f) => {
+            const count = f === 'all' ? totalItems : f === 'active' ? totalItems - completedItems : completedItems;
+            const isActive = filter === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                onPress={() => setFilter(f)}
+                style={[styles.filterSegBtn, isActive ? { backgroundColor: colors.primary } : null]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.filterSegText, { color: isActive ? '#FFFFFF' : colors.textSecondary }]}>
+                  {f === 'all' ? t(locale, 'checklist.all') : f === 'active' ? t(locale, 'checklist.active') : t(locale, 'checklist.done')} ({count})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
+      {/* List */}
       <FlatList
         ref={listRef}
-        data={checklist.items}
+        data={filteredItems}
         keyExtractor={item => item.id}
         style={styles.list}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 20, paddingTop: totalItems > 0 ? 0 : 40 }}
         ListEmptyComponent={
           <View style={styles.emptyList}>
-            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Anade subtareas para empezar</Text>
+            <Ionicons name="list-outline" size={48} color={colors.textTertiary + '60'} />
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
+              {filter === 'all' ? t(locale, 'checklist.noItems') : filter === 'active' ? t(locale, 'checklist.noActive') : t(locale, 'checklist.noDone')}
+            </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.itemRow, { borderBottomColor: colors.borderLight }]}>
-            <TouchableOpacity onPress={() => toggleItem(checklist.id, item.id, item.isCompleted)} activeOpacity={0.7} style={styles.checkboxTouchable}>
-              <View style={[styles.checkbox, { borderColor: item.isCompleted ? colors.primary : colors.textTertiary }, item.isCompleted && { backgroundColor: colors.primary }]}>
-                {item.isCompleted && <Text style={styles.checkmark}>v</Text>}
-              </View>
-            </TouchableOpacity>
-            {editingItemId === item.id ? (
-              <TextInput
-                ref={editInputRef}
-                style={[styles.itemEditInput, { color: colors.text, borderBottomColor: colors.primary }]}
-                value={editingItemText}
-                onChangeText={setEditingItemText}
-                onBlur={handleFinishEditItem}
-                onSubmitEditing={handleFinishEditItem}
-                returnKeyType="done"
-              />
-            ) : (
-              <TouchableOpacity onPress={() => handleStartEditItem(item.id, item.text)} style={styles.itemTextTouchable}>
-                <Text style={[styles.itemText, { color: item.isCompleted ? colors.textTertiary : colors.text }, item.isCompleted && { textDecorationLine: 'line-through' }]}>{item.text}</Text>
+        renderItem={({ item }) => {
+          const p = (item.priority || 'none') as ItemPriority;
+          const pColor = PRIORITY_COLORS[p];
+          const editing = editingItemId === item.id;
+          return (
+            <TouchableOpacity
+              activeOpacity={0.95}
+              onLongPress={() => handleStartEditItem(item.id, item.text)}
+              style={[styles.itemCard, { backgroundColor: colors.surface, borderColor: colors.borderLight, borderLeftColor: pColor }]}
+            >
+              <TouchableOpacity onPress={() => toggleItem(checklist.id, item.id, item.isCompleted)} activeOpacity={0.7} style={styles.checkboxTouchable}>
+                <View style={[styles.checkbox, {
+                  borderColor: item.isCompleted ? colors.primary : colors.textTertiary,
+                  backgroundColor: item.isCompleted ? colors.primary : 'transparent',
+                }]}>
+                  {item.isCompleted && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                </View>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={() => deleteItem(checklist.id, item.id)} style={styles.removeItem}>
-              <Text style={styles.removeItemText}>x</Text>
+
+              {editing ? (
+                <TextInput autoCapitalize="none" autoCorrect={false}
+                  ref={editInputRef}
+                  style={[styles.itemEditInput, { color: colors.text, borderBottomColor: colors.primary }]}
+                  value={editingItemText}
+                  onChangeText={setEditingItemText}
+                  onBlur={handleFinishEditItem}
+                  onSubmitEditing={handleFinishEditItem}
+                  returnKeyType="done"
+                />
+              ) : (
+                <TouchableOpacity onPress={() => handleStartEditItem(item.id, item.text)} style={styles.itemTextTouchable}>
+                  <Text style={[
+                    styles.itemText,
+                    { color: item.isCompleted ? colors.textTertiary : colors.text },
+                    item.isCompleted && styles.itemTextDone,
+                  ]} numberOfLines={2}>
+                    {item.text}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Priority cycle button */}
+              <TouchableOpacity
+                onPress={() => updateItemPriority(checklist.id, item.id, nextPriority(p))}
+                style={[styles.prioBtn, { backgroundColor: pColor + '18' }]}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name={PRIORITY_ICONS[p]} size={14} color={pColor} />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => deleteItem(checklist.id, item.id)} style={styles.removeItem} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="trash-outline" size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
             </TouchableOpacity>
-          </View>
-        )}
+          );
+        }}
       />
 
-      <View style={[styles.inputContainer, { backgroundColor: colors.surface, borderTopColor: colors.borderLight, paddingBottom: bottomInset + 6 }]}>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.inputBg, color: colors.text }]}
-          placeholder="Nueva subtarea..."
-          placeholderTextColor={colors.textTertiary}
-          value={newItemText}
-          onChangeText={setNewItemText}
-          onSubmitEditing={handleAddItem}
-          returnKeyType="done"
-        />
-        <TouchableOpacity onPress={handleAddItem} style={[styles.addButton, { backgroundColor: colors.primary }]} activeOpacity={0.7}>
-          <Text style={styles.addButtonText}>+</Text>
-        </TouchableOpacity>
+      {/* Bottom input */}
+      <View style={[styles.inputContainer, {
+        backgroundColor: colors.surface,
+        borderTopColor: colors.borderLight,
+        paddingBottom: bottomInset + 6,
+      }]}>
+        <View style={styles.inputRow}>
+          <TextInput autoCapitalize="none" autoCorrect={false}
+            style={[styles.input, { backgroundColor: colors.inputBg, color: colors.text }]}
+            placeholder={t(locale, 'checklist.newItem')}
+            placeholderTextColor={colors.textTertiary}
+            value={newItemText}
+            onChangeText={setNewItemText}
+            onSubmitEditing={handleAddItem}
+            returnKeyType="done"
+          />
+          <TouchableOpacity onPress={handleAddItem} style={[styles.addButton, { backgroundColor: colors.primary }]} activeOpacity={0.7}>
+            <Ionicons name="add" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.prioRow}>
+          {(['low', 'medium', 'high'] as ItemPriority[]).map((p) => (
+            <TouchableOpacity
+              key={p}
+              onPress={() => setNewPriority(p)}
+              style={[styles.prioChip, {
+                borderColor: PRIORITY_COLORS[p],
+                backgroundColor: newPriority === p ? PRIORITY_COLORS[p] + '20' : 'transparent',
+              }]}
+              activeOpacity={0.75}
+            >
+              <Ionicons name={PRIORITY_ICONS[p]} size={12} color={PRIORITY_COLORS[p]} />
+              <Text style={[styles.prioChipText, { color: PRIORITY_COLORS[p] }]}>
+                {t(locale, `priority.${p}`)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          {newPriority !== 'none' && (
+            <TouchableOpacity onPress={() => setNewPriority('none')} style={styles.prioClear} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -189,30 +347,59 @@ const styles = StyleSheet.create({
   center: { justifyContent: 'center', alignItems: 'center' },
   notFound: { fontSize: 15 },
   headerAction: { fontSize: 15, fontWeight: '600' },
-  header: { paddingHorizontal: 24, paddingTop: 80, paddingBottom: 8 },
-  titleInput: { fontSize: 22, fontWeight: '800', marginBottom: 4, paddingVertical: 2 },
-  progressText: { fontSize: 12, marginTop: 2 },
-  progressBg: { height: 4, borderRadius: 2, marginHorizontal: 24, marginBottom: 16, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 2 },
+
+  header: { paddingHorizontal: 24, paddingTop: Platform.OS === 'ios' ? 16 : 72, paddingBottom: 8 },
+  titleInput: { fontSize: 24, fontWeight: '800', marginBottom: 8, paddingVertical: 4 },
+
+  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 4 },
+  ringContainer: { position: 'relative', width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
+  ringText: { position: 'absolute', fontSize: 16, fontWeight: '800' },
+  statsTextCol: { flex: 1 },
+  statsBig: { fontSize: 26, fontWeight: '800' },
+  statsSmall: { fontSize: 12, fontWeight: '500', marginTop: 1 },
+  statsBadgeRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
+  statBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  statBadgeText: { fontSize: 11, fontWeight: '700' },
+
+  filterSegmented: {
+    flexDirection: 'row', gap: 4, marginHorizontal: 24, marginTop: 12, marginBottom: 8,
+    borderRadius: 16, borderWidth: 1, padding: 4,
+  },
+  filterSegBtn: {
+    flex: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 8,
+  },
+  filterSegText: { fontSize: 13, fontWeight: '700' },
+
   list: { flex: 1, paddingHorizontal: 20 },
-  emptyList: { paddingVertical: 40, alignItems: 'center' },
-  emptyText: { fontSize: 14 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1 },
-  checkboxTouchable: { paddingRight: 14 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  checkmark: { fontSize: 12, color: '#FFFFFF', fontWeight: '700' },
-  itemTextTouchable: { flex: 1, paddingVertical: 4 },
-  itemText: { fontSize: 15 },
-  itemEditInput: { flex: 1, fontSize: 15, paddingVertical: 4, borderBottomWidth: 1, marginRight: 8 },
-  removeItem: { width: 28, height: 28, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
-  removeItemText: { fontSize: 13, color: '#ef4444', fontWeight: '700' },
+  emptyList: { paddingVertical: 40, alignItems: 'center', gap: 12 },
+  emptyText: { fontSize: 14, textAlign: 'center' },
+
+  itemCard: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14,
+    marginBottom: 6, borderRadius: 14, borderWidth: 1, borderLeftWidth: 4, gap: 10,
+  },
+  checkboxTouchable: { paddingRight: 2 },
+  checkbox: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  itemTextTouchable: { flex: 1, paddingVertical: 2 },
+  itemText: { fontSize: 15, lineHeight: 20 },
+  itemTextDone: { textDecorationLine: 'line-through' },
+  itemEditInput: { flex: 1, fontSize: 15, paddingVertical: 2, borderBottomWidth: 1, marginRight: 4 },
+
+  prioBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  removeItem: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+
   inputContainer: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,
-    borderTopWidth: 1,
+    paddingHorizontal: 20, paddingVertical: 10, borderTopWidth: 1, gap: 8,
   },
-  input: {
-    flex: 1, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, marginRight: 10,
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  input: { flex: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15 },
+  addButton: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+
+  prioRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingLeft: 2 },
+  prioChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1,
   },
-  addButton: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  addButtonText: { fontSize: 20, color: '#FFFFFF', fontWeight: '300' },
+  prioChipText: { fontSize: 11, fontWeight: '700' },
+  prioClear: { marginLeft: 'auto' },
 });

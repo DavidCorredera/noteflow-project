@@ -1,9 +1,16 @@
-import { useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { AppColors } from '../../constants/theme';
+import { useLocaleStore } from '../../store/localeStore';
+import { t } from '../../i18n';
+import ImageViewer from '../ImageViewer';
 import {
   NOTE_INDEX_TOKEN,
+  NoteImage,
   NoteSketch,
+  NoteSketchStroke,
   buildIndexPreview,
   countCharacters,
   countWords,
@@ -23,19 +30,35 @@ interface Props {
   colors: AppColors;
   onBodyChange: (body: string) => void;
   onSketchesChange: (sketches: NoteSketch[]) => void;
+  onImagesChange?: (images: NoteImage[]) => void;
   onDrawStart?: () => void;
   onDrawEnd?: () => void;
   placeholder?: string;
   sketches: NoteSketch[];
+  images?: NoteImage[];
 }
 
 const BRUSH_COLORS = ['#000000', '#ffffff', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#6b7280'];
 const BRUSH_SIZES = [2.5, 4, 6];
+const TOOLBAR_HEIGHT = 40;
 
-type ToolAction = {
-  label: string;
+type ToolState = {
+  color: string;
+  width: number;
+  eraserWidth: number;
+};
+
+const DEFAULT_TOOL: ToolState = { color: BRUSH_COLORS[0], width: BRUSH_SIZES[1], eraserWidth: BRUSH_SIZES[1] };
+
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+type ToolItem = {
+  icon?: IoniconName;
+  label?: string;
   onPress: () => void;
 };
+
+type ToolGroup = ToolItem[];
 
 function replaceRange(text: string, selection: SelectionRange, replacement: string) {
   return `${text.slice(0, selection.start)}${replacement}${text.slice(selection.end)}`;
@@ -46,20 +69,31 @@ export default function NoteComposer({
   colors,
   onBodyChange,
   onSketchesChange,
+  onImagesChange,
   onDrawStart,
   onDrawEnd,
-  placeholder = 'Empieza a escribir...',
+  placeholder,
   sketches,
+  images = [],
 }: Props) {
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
-  const [brushColor, setBrushColor] = useState(BRUSH_COLORS[0]);
-  const [brushWidth, setBrushWidth] = useState(BRUSH_SIZES[1]);
+  const locale = useLocaleStore((s) => s.locale);
+  const [mode, setMode] = useState<'edit' | 'preview'>('preview');
+  const [sketchTools, setSketchTools] = useState<Record<string, ToolState>>({});
+  const [activeToolTab, setActiveToolTab] = useState<Record<string, 'color' | 'width' | 'eraser' | null>>({});
+  const [panelHeights, setPanelHeights] = useState<Record<string, number>>({});
+  const [editingSketchTitle, setEditingSketchTitle] = useState<string | null>(null);
+  const panelAnimsRef = useRef<Record<string, Animated.Value>>({});
+  const titleInputRefs = useRef<Record<string, TextInput>>({});
+  const redoStacks = useRef<Record<string, NoteSketchStroke[]>>({});
   const inputRef = useRef<TextInput>(null);
   const selectionRef = useRef<SelectionRange>({ start: 0, end: 0 });
 
   const headings = useMemo(() => buildIndexPreview(extractHeadings(body)), [body]);
   const words = useMemo(() => countWords(body), [body]);
   const characters = useMemo(() => countCharacters(body), [body]);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+
+  const actualPlaceholder = placeholder || t(locale, 'notas.placeholder');
 
   const syncSelection = (selection: SelectionRange) => {
     selectionRef.current = selection;
@@ -139,7 +173,7 @@ export default function NoteComposer({
       ...sketches,
       {
         id: createNoteEntityId('sketch'),
-        title: `Lienzo ${sketches.length + 1}`,
+        title: '',
         strokes: [],
       },
     ]);
@@ -153,75 +187,144 @@ export default function NoteComposer({
     onSketchesChange(sketches.filter((sketch) => sketch.id !== sketchId));
   };
 
-  const toolActions: ToolAction[] = [
-    { label: 'B', onPress: () => wrapSelection('**') },
-    { label: 'I', onPress: () => wrapSelection('*') },
-    { label: 'S', onPress: () => wrapSelection('~~') },
-    { label: 'H1', onPress: () => prefixSelectedLines('# ') },
-    { label: 'H2', onPress: () => prefixSelectedLines('## ') },
-    { label: '\u2022', onPress: () => prefixSelectedLines('- ') },
-    { label: '1.', onPress: () => prefixSelectedLines((index) => `${index + 1}. `) },
-    { label: '[ ]', onPress: () => prefixSelectedLines('[ ] ') },
-    { label: '>', onPress: () => prefixSelectedLines('> ') },
-    { label: '</>', onPress: () => insertStandaloneBlock('```\nCodigo\n```') },
-    { label: 'TOC', onPress: () => insertStandaloneBlock(NOTE_INDEX_TOKEN) },
-    { label: '---', onPress: () => insertStandaloneBlock('---') },
-    { label: 'Tpl', onPress: insertTemplate },
-    { label: '+Lienzo', onPress: addSketch },
+  const pickImage = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(t(locale, 'notas.permissionTitle'), t(locale, 'notas.permissionMsg'));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.4,
+      base64: true,
+    });
+    if (result.canceled || result.assets.length === 0) return;
+    const asset = result.assets[0];
+    if (!asset.base64) return;
+    try {
+      const mime = asset.mimeType || 'image/jpeg';
+      const dataUri = `data:${mime};base64,${asset.base64}`;
+      const img: NoteImage = {
+        id: createNoteEntityId('img'),
+        uri: dataUri,
+        width: asset.width || 0,
+        height: asset.height || 0,
+      };
+      onImagesChange?.([...images, img]);
+    } catch {
+      Alert.alert(t(locale, 'common.error'), t(locale, 'notas.imageError'));
+    }
+  };
+
+  const removeImage = (imageId: string) => {
+    onImagesChange?.(images.filter((img) => img.id !== imageId));
+  };
+
+  const toolGroups: ToolGroup[] = [
+    [
+      { label: 'B', onPress: () => wrapSelection('**') },
+      { label: 'I', onPress: () => wrapSelection('*') },
+      { label: 'S', onPress: () => wrapSelection('~~') },
+    ],
+    [
+      { label: 'H1', onPress: () => prefixSelectedLines('# ') },
+      { label: 'H2', onPress: () => prefixSelectedLines('## ') },
+    ],
+    [
+      { icon: 'list-outline', onPress: () => prefixSelectedLines('- ') },
+      { label: '1.', onPress: () => prefixSelectedLines((index) => `${index + 1}. `) },
+      { icon: 'checkbox-outline', onPress: () => prefixSelectedLines('[ ] ') },
+    ],
+    [
+      { icon: 'chatbubble-ellipses-outline', onPress: () => prefixSelectedLines('> ') },
+      { icon: 'code-outline', onPress: () => insertStandaloneBlock('```\nCodigo\n```') },
+    ],
+    [
+      { icon: 'list-outline', onPress: () => insertStandaloneBlock(NOTE_INDEX_TOKEN) },
+      { icon: 'remove-outline', onPress: () => insertStandaloneBlock('---') },
+      { icon: 'document-text-outline', onPress: insertTemplate },
+    ],
+    [
+      { icon: 'image-outline', label: '+', onPress: pickImage },
+      { icon: 'color-palette-outline', label: '+', onPress: addSketch },
+    ],
   ];
 
   return (
     <View style={styles.container}>
       <View style={[styles.segmented, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
         <TouchableOpacity
-          onPress={() => setMode('edit')}
-          style={[styles.segmentButton, mode === 'edit' ? { backgroundColor: colors.primary } : null]}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.segmentText, { color: mode === 'edit' ? '#FFFFFF' : colors.textSecondary }]}>Editar</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           onPress={() => setMode('preview')}
           style={[styles.segmentButton, mode === 'preview' ? { backgroundColor: colors.primary } : null]}
           activeOpacity={0.8}
         >
-          <Text style={[styles.segmentText, { color: mode === 'preview' ? '#FFFFFF' : colors.textSecondary }]}>Vista</Text>
+          <Text style={[styles.segmentText, { color: mode === 'preview' ? '#FFFFFF' : colors.textSecondary }]}>{t(locale, 'composer.view')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setMode('edit')}
+          style={[styles.segmentButton, mode === 'edit' ? { backgroundColor: colors.primary } : null]}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.segmentText, { color: mode === 'edit' ? '#FFFFFF' : colors.textSecondary }]}>{t(locale, 'composer.edit')}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={[styles.statPill, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-          <Text style={[styles.statText, { color: colors.textSecondary }]}>{words} palabras</Text>
-        </View>
-        <View style={[styles.statPill, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-          <Text style={[styles.statText, { color: colors.textSecondary }]}>{characters} caracteres</Text>
-        </View>
-        <View style={[styles.statPill, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-          <Text style={[styles.statText, { color: colors.textSecondary }]}>{headings.length} secciones</Text>
-        </View>
-        <View style={[styles.statPill, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-          <Text style={[styles.statText, { color: colors.textSecondary }]}>{sketches.length} lienzos</Text>
+      <View style={[styles.statsCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        <View style={styles.statRow}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{characters}</Text>
+            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{t(locale, 'notas.characters')}</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{words}</Text>
+            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{t(locale, 'notas.words')}</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{headings.length}</Text>
+            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{t(locale, 'notas.sections')}</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{sketches.length}</Text>
+            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{t(locale, 'notas.sketches')}</Text>
+          </View>
         </View>
       </View>
 
       {mode === 'edit' ? (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolbarScroll}>
-            {toolActions.map((tool) => (
-              <TouchableOpacity
-                key={tool.label}
-                onPress={tool.onPress}
-                style={[styles.toolButton, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}
-                activeOpacity={0.82}
-              >
-                <Text style={[styles.toolText, { color: colors.text }]}>{tool.label}</Text>
-              </TouchableOpacity>
+          <View style={styles.toolbarWrap}>
+            {toolGroups.map((group, gi) => (
+              <React.Fragment key={gi}>
+                {gi > 0 ? <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} /> : null}
+                <View style={styles.toolbarGroup}>
+                  {group.map((tool, ti) => (
+                    <TouchableOpacity
+                      key={ti}
+                      onPress={tool.onPress}
+                      style={[styles.toolWrapBtn, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}
+                      activeOpacity={0.82}
+                    >
+                      {tool.icon ? (
+                        <View style={styles.toolWrapIconRow}>
+                          <Ionicons name={tool.icon} size={15} color={colors.text} />
+                          {tool.label ? <Text style={[styles.toolWrapLabel, { color: colors.textSecondary }]}>{tool.label}</Text> : null}
+                        </View>
+                      ) : (
+                        <Text style={[styles.toolWrapLabel, { color: colors.text }]}>{tool.label}</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </React.Fragment>
             ))}
-          </ScrollView>
+          </View>
 
           {headings.length > 0 ? (
             <View style={[styles.outlineCard, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-              <Text style={[styles.outlineTitle, { color: colors.text }]}>Indice rapido</Text>
+              <Text style={[styles.outlineTitle, { color: colors.text }]}>{t(locale, 'notas.outlineTitle')}</Text>
               {headings.map((heading) => (
                 <Text key={`${heading.line}-${heading.title}`} style={[styles.outlineItem, { color: colors.textSecondary }]}>
                   {heading.label}
@@ -231,7 +334,7 @@ export default function NoteComposer({
           ) : null}
 
           <View style={[styles.editorShell, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TextInput
+            <TextInput autoCapitalize="none"
               ref={inputRef}
               multiline
               scrollEnabled={true}
@@ -244,109 +347,281 @@ export default function NoteComposer({
               onSelectionChange={(event) => {
                 selectionRef.current = event.nativeEvent.selection;
               }}
-              placeholder={placeholder}
+              placeholder={actualPlaceholder}
               placeholderTextColor={colors.textTertiary}
               textAlignVertical="top"
             />
           </View>
 
-          <View style={[styles.sketchTools, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-            <View style={styles.sketchToolsHeader}>
-              <Text style={[styles.sketchToolsTitle, { color: colors.text }]}>Lienzos</Text>
-              <TouchableOpacity onPress={addSketch} style={[styles.inlineAddButton, { backgroundColor: colors.primary }]} activeOpacity={0.85}>
-                <Text style={styles.inlineAddButtonText}>Nuevo</Text>
-              </TouchableOpacity>
+          {images.length > 0 ? (
+            <View style={styles.imageSection}>
+              <Text style={[styles.imageSectionTitle, { color: colors.text }]}>{t(locale, 'notas.imagesTitle')}</Text>
+              <View style={{ gap: 10 }}>
+                {images.map((img) => (
+                  <View key={img.id} style={[styles.imageCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <TouchableOpacity onPress={() => setViewerUri(img.uri)} activeOpacity={0.85}>
+                      <Image
+                        source={{ uri: img.uri }}
+                        style={{ width: '100%', height: 200, borderRadius: 12 }}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => removeImage(img.id)}
+                      style={styles.imageDeleteBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             </View>
+          ) : null}
 
-            <Text style={[styles.toolCaption, { color: colors.textTertiary }]}>Color</Text>
-            <View style={styles.colorRow}>
-              {BRUSH_COLORS.map((color) => (
-                <TouchableOpacity
-                  key={color}
-                  onPress={() => setBrushColor(color)}
-                    style={[
-                      styles.colorDot,
-                      { backgroundColor: color, borderColor: brushColor === color ? colors.text : colors.border },
-                    ]}
-                  activeOpacity={0.85}
-                />
-              ))}
-            </View>
+          {sketches.map((sketch, index) => {
+            const tool = sketchTools[sketch.id] ?? DEFAULT_TOOL;
+            const tab = activeToolTab[sketch.id] ?? null;
+            const eraser = tab === 'eraser';
+            const panelAnim = panelAnimsRef.current[sketch.id] ?? (panelAnimsRef.current[sketch.id] = new Animated.Value(0));
+            const panelHeight = panelHeights[sketch.id] ?? 0;
 
-            <Text style={[styles.toolCaption, { color: colors.textTertiary }]}>Trazo</Text>
-            <View style={styles.widthRow}>
-              {BRUSH_SIZES.map((width, index) => (
-                <TouchableOpacity
-                  key={width}
-                  onPress={() => setBrushWidth(width)}
-                  style={[
-                    styles.widthChip,
-                    {
-                      backgroundColor: brushWidth === width ? colors.primary : colors.surface,
-                      borderColor: brushWidth === width ? colors.primary : colors.border,
-                    },
-                  ]}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.widthChipText, { color: brushWidth === width ? '#FFFFFF' : colors.textSecondary }]}>
-                    {index === 0 ? 'Fino' : index === 1 ? 'Medio' : 'Grueso'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+            const setTool = (partial: Partial<ToolState>) => {
+              setSketchTools((prev) => ({ ...prev, [sketch.id]: { ...tool, ...partial } }));
+            };
 
-          {sketches.map((sketch, index) => (
-            <View key={sketch.id} style={[styles.sketchCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.sketchCardHeader}>
-                <TextInput
-                  style={[styles.sketchCardTitle, { color: colors.text, borderBottomColor: colors.border }]}
-                  value={sketch.title || `Lienzo ${index + 1}`}
-                  onChangeText={(newTitle) => updateSketch(sketch.id, (current) => ({ ...current, title: newTitle }))}
-                  placeholder="Nombre del lienzo"
-                  placeholderTextColor={colors.textTertiary}
-                />
-                <View style={styles.sketchActions}>
-                  <TouchableOpacity
-                    onPress={() => updateSketch(sketch.id, (current) => ({ ...current, strokes: current.strokes.slice(0, -1) }))}
-                    style={[styles.secondaryChip, { borderColor: colors.border, backgroundColor: colors.surfaceLight }]}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.secondaryChipText, { color: colors.textSecondary }]}>Deshacer</Text>
+            const toggleTab = (next: 'color' | 'width' | 'eraser') => {
+              const opening = tab !== next;
+              Animated.timing(panelAnim, {
+                toValue: opening ? 1 : 0,
+                duration: 180,
+                useNativeDriver: true,
+              }).start();
+              setActiveToolTab((prev) => ({ ...prev, [sketch.id]: opening ? next : null }));
+            };
+
+            const handleUndo = () => {
+              if (sketch.strokes.length === 0) return;
+              const removed = sketch.strokes[sketch.strokes.length - 1];
+              redoStacks.current[sketch.id] = [...(redoStacks.current[sketch.id] || []), removed];
+              updateSketch(sketch.id, (c) => ({ ...c, strokes: c.strokes.slice(0, -1) }));
+            };
+
+            const handleRedo = () => {
+              const stack = redoStacks.current[sketch.id] || [];
+              if (stack.length === 0) return;
+              const restored = stack[stack.length - 1];
+              redoStacks.current[sketch.id] = stack.slice(0, -1);
+              updateSketch(sketch.id, (c) => ({ ...c, strokes: [...c.strokes, restored] }));
+            };
+
+            const canUndo = sketch.strokes.length > 0;
+            const canRedo = (redoStacks.current[sketch.id] || []).length > 0;
+
+            const openActions = () =>
+              Alert.alert(sketch.title || `${t(locale, 'composer.sketch')} ${index + 1}`, undefined, [
+                {
+                  text: t(locale, 'sketch.editName'),
+                  onPress: () => {
+                    setEditingSketchTitle(sketch.id);
+                    setTimeout(() => titleInputRefs.current[sketch.id]?.focus(), 100);
+                  },
+                },
+                {
+                  text: t(locale, 'sketch.share'),
+                  onPress: () => {},
+                },
+                { text: t(locale, 'sketch.delete'), style: 'destructive', onPress: () => removeSketch(sketch.id) },
+                { text: t(locale, 'sketch.cancel'), style: 'cancel' },
+              ]);
+
+            return (
+              <View key={sketch.id} style={[styles.sketchCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.sketchCardTop}>
+                    <TextInput autoCapitalize="none" autoCorrect={false}
+                      ref={(el) => {
+                      if (el) titleInputRefs.current[sketch.id] = el;
+                      }}
+                    style={[styles.sketchCardTitle, { color: colors.text }]}
+                    value={sketch.title || `${t(locale, 'composer.sketch')} ${index + 1}`}
+                    onChangeText={(newTitle) => updateSketch(sketch.id, (current) => ({ ...current, title: newTitle }))}
+                    onFocus={() => setEditingSketchTitle(sketch.id)}
+                    onBlur={() => setEditingSketchTitle(null)}
+                    placeholder={t(locale, 'composer.sketchName')}
+                    placeholderTextColor={colors.textTertiary}
+                  />
+                  <TouchableOpacity onPress={handleUndo} disabled={!canUndo} style={[styles.headerBtn, !canUndo && { opacity: 0.3 }]} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Ionicons name="arrow-undo" size={17} color={colors.textSecondary} />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => updateSketch(sketch.id, (current) => ({ ...current, strokes: [] }))}
-                    style={[styles.secondaryChip, { borderColor: colors.border, backgroundColor: colors.surfaceLight }]}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.secondaryChipText, { color: colors.textSecondary }]}>Limpiar</Text>
+                  <TouchableOpacity onPress={handleRedo} disabled={!canRedo} style={[styles.headerBtn, !canRedo && { opacity: 0.3 }]} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Ionicons name="arrow-redo" size={17} color={colors.textSecondary} />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => removeSketch(sketch.id)}
-                    style={[styles.secondaryChip, { borderColor: colors.error + '40', backgroundColor: colors.deleteBg }]}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.secondaryChipText, { color: colors.error }]}>Quitar</Text>
+                  <TouchableOpacity onPress={openActions} style={styles.sketchMenuBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={[styles.sketchMenuDots, { color: colors.textTertiary }]}>{'\u22EE'}</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
 
-              <SketchCanvas
-                colors={colors}
-                sketch={sketch}
-                strokeColor={brushColor}
-                strokeWidth={brushWidth}
-                onDrawStart={onDrawStart}
-                onDrawEnd={onDrawEnd}
-                onChange={(nextSketch) => updateSketch(sketch.id, () => nextSketch)}
-              />
-            </View>
-          ))}
+                <SketchCanvas
+                  colors={colors}
+                  sketch={sketch}
+                  strokeColor={tool.color}
+                  strokeWidth={eraser ? tool.eraserWidth : tool.width}
+                  eraser={eraser}
+                  onDrawStart={onDrawStart}
+                  onDrawEnd={onDrawEnd}
+                  onChange={(nextSketch) => {
+                    redoStacks.current[sketch.id] = [];
+                    updateSketch(sketch.id, () => nextSketch);
+                  }}
+                />
+
+                <View style={styles.toolbarWrapper}>
+                  {/* Overlay panel */}
+                  <Animated.View
+                    style={[
+                      styles.toolOverlay,
+                      {
+                        opacity: panelAnim,
+                        transform: [
+                          {
+                            translateY: panelAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [panelHeight || 100, 0],
+                            }),
+                          },
+                        ],
+                        pointerEvents: tab ? 'auto' : 'none',
+                        bottom: TOOLBAR_HEIGHT,
+                      },
+                    ]}
+                    onLayout={(e) => {
+                      const h = e.nativeEvent.layout.height;
+                      if ((panelHeights[sketch.id] ?? 0) !== h) {
+                        setPanelHeights((prev) => ({ ...prev, [sketch.id]: h }));
+                      }
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.toolPanel,
+                        { backgroundColor: colors.surfaceLight, borderColor: colors.border },
+                      ]}
+                    >
+                      {tab === 'color' ? (
+                        <View style={styles.colorRow}>
+                          {BRUSH_COLORS.map((color) => (
+                            <TouchableOpacity
+                              key={color}
+                              onPress={() => setTool({ color })}
+                              style={[styles.colorDot, { backgroundColor: color, borderColor: tool.color === color ? colors.text : 'transparent' }]}
+                              activeOpacity={0.85}
+                            />
+                          ))}
+                        </View>
+                      ) : tab === 'width' ? (
+                        <View style={styles.widthRow}>
+                          {BRUSH_SIZES.map((width, i) => {
+                            const dotSize = [10, 18, 26][i];
+                            return (
+                              <TouchableOpacity
+                                key={width}
+                                onPress={() => setTool({ width })}
+                                style={styles.widthDotBtn}
+                                activeOpacity={0.85}
+                              >
+                                <View
+                                  style={[
+                                    styles.widthDot,
+                                    {
+                                      width: dotSize,
+                                      height: dotSize,
+                                      borderRadius: dotSize / 2,
+                                      backgroundColor: tool.width === width ? colors.primary : colors.textTertiary + '60',
+                                    },
+                                  ]}
+                                />
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                          {BRUSH_SIZES.map((width, i) => {
+                            const dotSize = [10, 18, 26][i];
+                            return (
+                              <TouchableOpacity
+                                key={width}
+                                onPress={() => setTool({ eraserWidth: width })}
+                                style={styles.widthDotBtn}
+                                activeOpacity={0.85}
+                              >
+                                <View
+                                  style={[
+                                    styles.widthDot,
+                                    {
+                                      width: dotSize,
+                                      height: dotSize,
+                                      borderRadius: dotSize / 2,
+                                      backgroundColor: tool.eraserWidth === width ? colors.warning : colors.textTertiary + '60',
+                                    },
+                                  ]}
+                                />
+                              </TouchableOpacity>
+                            );
+                          })}
+                          <View style={{ width: 1, height: 20, backgroundColor: colors.border }} />
+                          <TouchableOpacity
+                            onPress={() => updateSketch(sketch.id, (c) => ({ ...c, strokes: [] }))}
+                            style={{ paddingHorizontal: 4 }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.error }}>{t(locale, 'sketch.clear')}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  </Animated.View>
+
+                  {/* Toolbar */}
+                  <View style={[styles.toolbar, { borderTopColor: colors.border }]}>
+                    <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-evenly' }}>
+                      <TouchableOpacity
+                        onPress={() => toggleTab('color')}
+                        style={[styles.toolbarBtn, tab === 'color' && { backgroundColor: colors.primaryLight + '30' }]}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.toolbarBtnText, { color: tab === 'color' ? colors.primary : colors.textSecondary }]}>{t(locale, 'sketch.color')}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => toggleTab('width')}
+                        style={[styles.toolbarBtn, tab === 'width' && { backgroundColor: colors.primaryLight + '30' }]}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.toolbarBtnText, { color: tab === 'width' ? colors.primary : colors.textSecondary }]}>{t(locale, 'sketch.stroke')}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => toggleTab('eraser')}
+                        style={[styles.toolbarBtn, eraser && { backgroundColor: colors.warning + '25' }]}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.toolbarBtnText, { color: eraser ? colors.warning : colors.textSecondary }]}>{t(locale, 'sketch.eraser')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
         </>
       ) : (
         <View style={[styles.previewShell, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <NoteMarkdown body={body} colors={colors} sketches={sketches} />
+          <NoteMarkdown body={body} colors={colors} sketches={sketches} images={images} />
         </View>
+      )}
+      {viewerUri && (
+        <ImageViewer visible={!!viewerUri} uri={viewerUri} onClose={() => setViewerUri(null)} />
       )}
     </View>
   );
@@ -372,37 +647,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  statsRow: {
+  statsText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  toolbarWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
-  statPill: {
+  toolbarGroup: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+  toolWrapBtn: {
     borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  statText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  toolbarScroll: {
-    gap: 10,
-    paddingRight: 8,
-  },
-  toolButton: {
-    borderWidth: 1,
-    borderRadius: 14,
-    minWidth: 52,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 10,
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toolText: {
-    fontSize: 13,
-    fontWeight: '700',
+  toolWrapIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+  },
+  toolWrapLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: -1,
+  },
+  toolbarSep: {
+    width: 1,
+    height: 22,
   },
   outlineCard: {
     borderWidth: 1,
@@ -438,88 +717,146 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 18,
   },
-  sketchTools: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
-    gap: 12,
-  },
-  sketchToolsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sketchToolsTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  inlineAddButton: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  inlineAddButtonText: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  toolCaption: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
   colorRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   colorDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
   },
   widthRow: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
   },
-  widthChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  widthDotBtn: {
+    padding: 6,
   },
-  widthChipText: {
-    fontSize: 12,
-    fontWeight: '700',
+  widthDot: {
+    borderWidth: 0,
   },
   sketchCard: {
     borderWidth: 1,
     borderRadius: 22,
     padding: 16,
-    gap: 14,
+    gap: 12,
   },
-  sketchCardHeader: {
-    gap: 10,
+  sketchCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   sketchCardTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  sketchMenuBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sketchMenuDots: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  headerBtn: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolbarWrapper: {
+    position: 'relative',
+  },
+  toolOverlay: {
+    position: 'absolute',
+    left: -16,
+    right: -16,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+    zIndex: 10,
+  },
+  toolPanel: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: TOOLBAR_HEIGHT,
+    borderTopWidth: 1,
+    gap: 2,
+  },
+  toolbarBtn: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolbarBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  imageSection: {
+    gap: 14,
+  },
+  imageSectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  imageCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  imageDeleteBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+  },
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
     fontSize: 16,
     fontWeight: '800',
   },
-  sketchActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginTop: 2,
   },
-  secondaryChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  secondaryChipText: {
-    fontSize: 12,
-    fontWeight: '700',
+  statDivider: {
+    width: 1,
+    height: 28,
   },
 });

@@ -32,11 +32,13 @@ export async function deleteNoteApi(id: string): Promise<void> {
   if (!res.ok) throw new Error('Error al borrar nota');
 }
 
-export async function addChecklistItemApi(noteId: string, text: string) {
+export async function addChecklistItemApi(noteId: string, text: string, priority?: string) {
+  const body: Record<string, any> = { text };
+  if (priority && priority !== 'none') body.priority = priority;
   const res = await fetch(`${BASE_URL}/notes/${noteId}/checklist-items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error('Error al añadir ítem');
   return res.json();
@@ -52,11 +54,11 @@ export async function toggleChecklistItemApi(itemId: string, isCompleted: boolea
   return res.json();
 }
 
-export async function updateChecklistItemApi(itemId: string, text: string) {
+export async function updateChecklistItemApi(itemId: string, data: { text?: string; priority?: string; is_completed?: boolean }) {
   const res = await fetch(`${BASE_URL}/checklist-items/${itemId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Error al actualizar ítem');
   return res.json();
@@ -69,7 +71,7 @@ export async function deleteChecklistItemApi(itemId: string): Promise<void> {
   if (!res.ok) throw new Error('Error al borrar ítem');
 }
 
-export async function updateNoteApi(id: string, data: Partial<{ title: string; content: string; tags: string[]; color: string }>) {
+export async function updateNoteApi(id: string, data: Partial<{ title: string; content: string; tags: string[]; color: string; archived: boolean }>) {
   const res = await fetch(`${BASE_URL}/notes/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

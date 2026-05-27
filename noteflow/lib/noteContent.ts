@@ -19,10 +19,18 @@ export type NoteSketch = {
   strokes: NoteSketchStroke[];
 };
 
+export type NoteImage = {
+  id: string;
+  uri: string;
+  width: number;
+  height: number;
+};
+
 export type NoteDocument = {
   version: number;
   body: string;
   sketches: NoteSketch[];
+  images: NoteImage[];
 };
 
 type Heading = {
@@ -35,6 +43,7 @@ const EMPTY_DOCUMENT: NoteDocument = {
   version: NOTE_DOCUMENT_VERSION,
   body: '',
   sketches: [],
+  images: [],
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -66,6 +75,18 @@ function normalizeStroke(stroke: unknown): NoteSketchStroke | null {
     color: typeof stroke.color === 'string' ? stroke.color : '#7c3aed',
     width: typeof stroke.width === 'number' ? stroke.width : 3,
     points,
+  };
+}
+
+function normalizeImage(image: unknown): NoteImage | null {
+  if (!isObject(image) || typeof image.id !== 'string' || typeof image.uri !== 'string') {
+    return null;
+  }
+  return {
+    id: image.id,
+    uri: image.uri,
+    width: typeof image.width === 'number' ? image.width : 0,
+    height: typeof image.height === 'number' ? image.height : 0,
   };
 }
 
@@ -107,6 +128,7 @@ export function parseNoteContent(content?: null | string): NoteDocument {
         version: NOTE_DOCUMENT_VERSION,
         body: content,
         sketches: [],
+        images: [],
       };
     }
 
@@ -114,12 +136,14 @@ export function parseNoteContent(content?: null | string): NoteDocument {
       version: typeof parsed.version === 'number' ? parsed.version : NOTE_DOCUMENT_VERSION,
       body: parsed.body,
       sketches: parsed.sketches.map(normalizeSketch).filter(Boolean) as NoteSketch[],
+      images: Array.isArray(parsed.images) ? parsed.images.map(normalizeImage).filter(Boolean) as NoteImage[] : [],
     };
   } catch {
     return {
       version: NOTE_DOCUMENT_VERSION,
       body: content,
       sketches: [],
+      images: [],
     };
   }
 }
@@ -129,6 +153,7 @@ export function serializeNoteContent(document: NoteDocument) {
     version: NOTE_DOCUMENT_VERSION,
     body: document.body,
     sketches: document.sketches,
+    images: document.images,
   });
 }
 
@@ -179,8 +204,16 @@ export function getNotePlainTextPreview(content?: null | string) {
     return plainText;
   }
 
+  if (document.sketches.length > 0 && document.images.length > 0) {
+    return `${document.sketches.length} lienzo${document.sketches.length === 1 ? '' : 's'} · ${document.images.length} imagen${document.images.length === 1 ? '' : 'es'}`;
+  }
+
   if (document.sketches.length > 0) {
     return `${document.sketches.length} lienzo${document.sketches.length === 1 ? '' : 's'} adjunto${document.sketches.length === 1 ? '' : 's'}`;
+  }
+
+  if (document.images.length > 0) {
+    return `${document.images.length} imagen${document.images.length === 1 ? '' : 'es'} adjunta${document.images.length === 1 ? '' : 's'}`;
   }
 
   return '';

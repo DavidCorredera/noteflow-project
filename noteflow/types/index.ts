@@ -3,16 +3,21 @@ export interface BaseNote {
   title: string;
   createdAt: Date;
   updatedAt: Date;
+  archived?: boolean;
 }
 
 export interface Note extends BaseNote { 
   content: string; 
 }
 
+export type ItemPriority = 'none' | 'low' | 'medium' | 'high';
+
 export interface ChecklistItem {
   id: string;
   text: string;
   isCompleted: boolean;
+  priority?: ItemPriority;
+  dueDate?: string;
 }
 
 export interface ChecklistNote extends BaseNote { 
@@ -21,7 +26,9 @@ export interface ChecklistNote extends BaseNote {
 
 export interface IdeaNote extends BaseNote { 
   tags: string[]; 
-  color: string; 
+  color: string;
+  content?: string;
+  pinned?: boolean;
 }
 
 export type AnyNote = Note | ChecklistNote | IdeaNote;
