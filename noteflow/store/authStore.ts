@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
+import { auth, firestore, FirebaseUser } from '../lib/firebase';
 import { useNotesStore } from './notesStore';
 
 export type UserProfile = {
@@ -12,11 +11,11 @@ export type UserProfile = {
 };
 
 type AuthState = {
-  user: FirebaseAuthTypes.User | null;
+  user: FirebaseUser | null;
   profile: UserProfile | null;
   loading: boolean;
   initialized: boolean;
-  setUser: (user: FirebaseAuthTypes.User | null) => void;
+  setUser: (user: FirebaseUser | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   setLoading: (loading: boolean) => void;
   setInitialized: (initialized: boolean) => void;
@@ -39,15 +38,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setInitialized: (initialized) => set({ initialized }),
 
   login: async (email, password) => {
-    await auth().signInWithEmailAndPassword(email, password);
+    await auth.signInWithEmailAndPassword(email, password);
   },
 
   register: async (email, password, name) => {
-    const userCredential = await auth().createUserWithEmailAndPassword(email, password);
-    const userId = userCredential.user.uid;
+    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+    const userId = userCredential.uid;
 
     try {
-      await firestore().collection('users').doc(userId).set({
+      await firestore.collection('users').doc(userId).set({
         name,
         email,
         createdAt: firestore.FieldValue.serverTimestamp(),
@@ -59,13 +58,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    await auth().signOut();
+    await auth.signOut();
     useNotesStore.getState().resetNotes();
     set({ user: null, profile: null });
   },
 
   loadProfile: async (uid) => {
-    const doc = await firestore().collection('users').doc(uid).get();
+    const doc = await firestore.collection('users').doc(uid).get();
     if (doc.exists()) {
       const data = doc.data();
       if (data) set({ profile: { uid, ...data } as UserProfile });
@@ -75,7 +74,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (data) => {
     const user = get().user;
     if (!user) return;
-    await firestore().collection('users').doc(user.uid).update(data);
+    await firestore.collection('users').doc(user.uid).update(data);
     set({ profile: get().profile ? { ...get().profile!, ...data } : null });
   },
 }));

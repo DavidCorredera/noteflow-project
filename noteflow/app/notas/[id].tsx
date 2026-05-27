@@ -27,6 +27,7 @@ export default function NoteDetailScreen() {
   const [images, setImages] = useState<NoteImage[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const hasChanges = useRef(false);
+  const loadedIdRef = useRef<string | null>(null);
   const titleRef = useRef(title);
   const bodyRef = useRef(body);
   const sketchesRef = useRef(sketches);
@@ -34,11 +35,15 @@ export default function NoteDetailScreen() {
 
   useLayoutEffect(() => {
     if (note) {
-      const parsedContent = parseNoteContent(note.content);
-      setTitle(note.title);
-      setBody(parsedContent.body);
-      setSketches(parsedContent.sketches);
-      setImages(parsedContent.images);
+      if (note.id !== loadedIdRef.current) {
+        loadedIdRef.current = note.id;
+        const parsedContent = parseNoteContent(note.content);
+        setTitle(note.title);
+        setBody(parsedContent.body);
+        setSketches(parsedContent.sketches);
+        setImages(parsedContent.images);
+        hasChanges.current = false;
+      }
       navigation.setOptions({
         title: '',
         headerTransparent: false,
@@ -51,7 +56,7 @@ export default function NoteDetailScreen() {
         ),
       });
     }
-  }, [note, navigation, colors]);
+  }, [note?.id, navigation, colors]);
 
   useEffect(() => {
     titleRef.current = title;

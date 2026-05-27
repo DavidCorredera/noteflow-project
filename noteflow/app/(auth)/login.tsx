@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvo
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import auth from '@react-native-firebase/auth';
+import { auth } from '../../lib/firebase';
 import { useThemeStore } from '../../store/themeStore';
 import { useAuthStore } from '../../store/authStore';
 import { getColors } from '../../constants/theme';
@@ -31,7 +31,15 @@ export default function LoginScreen() {
       await login(email.trim(), password);
       router.replace('/(tabs)/dashboard');
     } catch (e: any) {
-      Alert.alert(t(locale, 'common.error'), e.message || t(locale, 'auth.loginError'));
+      const code = e?.code || '';
+      const errorMap: Record<string, string> = {
+        'auth/invalid-credential': 'auth.invalidCredential',
+        'auth/wrong-password': 'auth.invalidPassword',
+        'auth/user-not-found': 'auth.userNotFound',
+        'auth/invalid-email': 'auth.invalidEmail',
+        'auth/too-many-requests': 'auth.tooManyRequests',
+      };
+      Alert.alert(t(locale, 'common.error'), t(locale, errorMap[code] || 'auth.loginError'));
     } finally {
       setLoading(false);
     }
@@ -43,7 +51,7 @@ export default function LoginScreen() {
       return;
     }
     try {
-      await auth().sendPasswordResetEmail(email.trim());
+      await auth.sendPasswordResetEmail(email.trim());
       Alert.alert(t(locale, 'auth.emailSent'), t(locale, 'auth.emailSentMsg'));
     } catch (e: any) {
       Alert.alert(t(locale, 'common.error'), e.message || t(locale, 'auth.sendEmailError'));

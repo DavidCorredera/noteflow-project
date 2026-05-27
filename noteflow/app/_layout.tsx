@@ -12,7 +12,7 @@ import { t } from '../i18n';
 import { Platform, View, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import auth from '@react-native-firebase/auth';
+import { auth } from '../lib/firebase';
 
 function useScreenOptions() {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
@@ -63,7 +63,7 @@ export default function RootLayout() {
   }, [loaded, localeLoaded]);
 
   useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged(async (user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setUser(user);
       if (user) {
         await loadProfile(user.uid);

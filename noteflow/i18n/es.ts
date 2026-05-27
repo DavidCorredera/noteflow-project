@@ -37,6 +37,11 @@ export const es = {
   'auth.passwordMinError': 'La contraseña debe tener al menos 6 caracteres',
   'auth.passwordMinHint': 'Contraseña (mín. 6 caracteres)',
   'auth.sendEmailError': 'No se pudo enviar el correo',
+  'auth.invalidPassword': 'Contraseña incorrecta',
+  'auth.invalidEmail': 'Email inválido',
+  'auth.userNotFound': 'Usuario no encontrado',
+  'auth.tooManyRequests': 'Demasiados intentos. Intenta más tarde.',
+  'auth.invalidCredential': 'Email o contraseña incorrectos',
 
   'tabs.dashboard': 'Inicio',
   'tabs.notes': 'Notas',

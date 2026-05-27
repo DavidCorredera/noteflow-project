@@ -37,6 +37,11 @@ export const en = {
   'auth.passwordMinError': 'Password must be at least 6 characters',
   'auth.passwordMinHint': 'Password (min. 6 characters)',
   'auth.sendEmailError': 'Could not send the email',
+  'auth.invalidPassword': 'Incorrect password',
+  'auth.invalidEmail': 'Invalid email',
+  'auth.userNotFound': 'User not found',
+  'auth.tooManyRequests': 'Too many attempts. Try again later.',
+  'auth.invalidCredential': 'Invalid email or password',
 
   'tabs.dashboard': 'Home',
   'tabs.notes': 'Notes',

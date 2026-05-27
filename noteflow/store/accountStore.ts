@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
+import { auth, firestore } from '../lib/firebase';
 import { useNotesStore } from './notesStore';
 
 interface SavedAccount {
@@ -62,7 +61,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       const raw = await loadFromStorage();
       if (raw) {
         const accounts: SavedAccount[] = JSON.parse(raw);
-        const currentUser = auth().currentUser;
+        const currentUser = auth.currentUser;
         set({
           accounts,
           activeEmail: currentUser?.email ?? null,
@@ -70,7 +69,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
         });
       } else {
         // First launch: save current user if signed in
-        const currentUser = auth().currentUser;
+        const currentUser = auth.currentUser;
         if (currentUser?.email) {
           const profile = await loadProfileOnce(currentUser.uid);
           const initial: SavedAccount = {
@@ -102,14 +101,14 @@ export const useAccountStore = create<AccountState>((set, get) => ({
 
     let currentUser;
     try {
-      await auth().signInWithEmailAndPassword(email, password);
-      currentUser = auth().currentUser!;
+      await auth.signInWithEmailAndPassword(email, password);
+      currentUser = auth.currentUser!;
     } catch (signInErr: any) {
       if (signInErr.code === 'auth/invalid-credential' || signInErr.code === 'auth/user-not-found') {
         try {
-          await auth().createUserWithEmailAndPassword(email, password);
-          currentUser = auth().currentUser!;
-          await firestore().collection('users').doc(currentUser.uid).set({
+          await auth.createUserWithEmailAndPassword(email, password);
+          currentUser = auth.currentUser!;
+          await firestore.collection('users').doc(currentUser.uid).set({
             name: email.split('@')[0],
             email,
             avatarUrl: null,
@@ -151,7 +150,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       throw new Error('Esta cuenta no tiene contraseña guardada');
     }
 
-    await auth().signInWithEmailAndPassword(account.email, account.password);
+    await auth.signInWithEmailAndPassword(account.email, account.password);
     useNotesStore.getState().resetNotes();
     await useNotesStore.getState().fetchNotes();
     set({ activeEmail: email });
@@ -168,7 +167,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       if (updated.length > 0) {
         await get().switchToAccount(updated[0].email);
       } else {
-        await auth().signOut();
+        await auth.signOut();
         set({ activeEmail: null });
       }
     }
@@ -186,7 +185,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
 
 async function loadProfileOnce(uid: string) {
   try {
-    const doc = await firestore().collection('users').doc(uid).get();
+    const doc = await firestore.collection('users').doc(uid).get();
     if (doc.exists()) {
       return doc.data();
     }

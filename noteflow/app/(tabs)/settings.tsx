@@ -63,7 +63,7 @@ export default function SettingsScreen() {
   const [addEmail, setAddEmail] = useState('');
   const [addPassword, setAddPassword] = useState('');
   const [addLoading, setAddLoading] = useState(false);
-  const [avatarOverlay, setAvatarOverlay] = useState(false);
+
 
   const handleAvatarPress = () => {
     Alert.alert(t(locale, 'settings.changePhoto'), '', [
@@ -153,25 +153,19 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t(locale, 'settings.account')}</Text>
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <TouchableOpacity onPress={() => setAccountModalVisible(true)} activeOpacity={0.7} style={styles.avatarRow}>
-            <TouchableOpacity
-              onPress={handleAvatarPress}
-              onPressIn={() => setAvatarOverlay(true)}
-              onPressOut={() => setAvatarOverlay(false)}
-              style={styles.avatarContainer}
-              activeOpacity={1}
-            >
-              {profile?.avatarUrl ? (
-                <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary + '20' }]}>
-                  <Ionicons name="person" size={22} color={colors.primary} />
-                </View>
-              )}
-              {avatarOverlay && (
-                <View style={[styles.avatarOverlay, { backgroundColor: colors.textTertiary + '60' }]}>
-                  <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />
-                </View>
-              )}
+            <TouchableOpacity onPress={handleAvatarPress} style={styles.avatarContainer} activeOpacity={0.7}>
+              <View style={[styles.avatarBorder, { borderColor: colors.textSecondary }]}>
+                {profile?.avatarUrl ? (
+                  <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary + '20' }]}>
+                    <Ionicons name="person" size={22} color={colors.primary} />
+                  </View>
+                )}
+              </View>
+              <View style={styles.avatarEditBadge}>
+                <Ionicons name="pencil" size={10} color="#FFFFFF" />
+              </View>
             </TouchableOpacity>
             <View style={styles.avatarText}>
               <Text style={[{ color: colors.text, fontWeight: '600', fontSize: 16 }]}>{profile?.name || user?.email || t(locale, 'settings.userFallback')}</Text>
@@ -230,103 +224,110 @@ export default function SettingsScreen() {
       </View>
 
       <Modal visible={accountModalVisible} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setAccountModalVisible(false)}>
-          <Pressable style={[styles.accountModal, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>{t(locale, 'settings.accountCenter')}</Text>
-            {accounts.length === 0 ? (
-              <Text style={[{ color: colors.textSecondary, textAlign: 'center', marginVertical: 20 }]}>{t(locale, 'settings.noAccounts')}</Text>
+        <Pressable style={styles.modalOverlay} onPress={() => { setAccountModalVisible(false); setAddAccountVisible(false); }}>
+          <Pressable style={[styles.accountModal, { backgroundColor: colors.surface }]} onPress={() => {}}>
+            {addAccountVisible ? (
+              <>
+                <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 16 }]}>{t(locale, 'settings.addAccount')}</Text>
+                <TextInput autoCapitalize="none" autoCorrect={false}
+                  style={[styles.addInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                  placeholder={t(locale, 'common.email')}
+                  placeholderTextColor={colors.textTertiary}
+                  value={addEmail}
+                  onChangeText={setAddEmail}
+                  keyboardType="email-address"
+                />
+                <TextInput autoCapitalize="none" autoCorrect={false}
+                  style={[styles.addInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                  placeholder={t(locale, 'common.password')}
+                  placeholderTextColor={colors.textTertiary}
+                  value={addPassword}
+                  onChangeText={setAddPassword}
+                  secureTextEntry
+                />
+                <TouchableOpacity
+                  style={[styles.addAccountConfirmBtn, { backgroundColor: colors.primary, opacity: addLoading ? 0.7 : 1 }]}
+                  onPress={handleAddAccount}
+                  disabled={addLoading}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.addAccountConfirmText}>{addLoading ? t(locale, 'settings.adding') : t(locale, 'settings.addAndLogin')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.addAccountBackBtn, { borderColor: colors.border }]}
+                  onPress={() => { setAddAccountVisible(false); setAddEmail(''); setAddPassword(''); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[{ color: colors.textSecondary, fontSize: 14 }]}>{t(locale, 'common.cancel')}</Text>
+                </TouchableOpacity>
+              </>
             ) : (
-              accounts.map((acc) => {
-                const isActive = acc.email === activeEmail;
-                return (
+              <>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>{t(locale, 'settings.accountCenter')}</Text>
+                {accounts.length === 0 ? (
+                  <Text style={[{ color: colors.textSecondary, textAlign: 'center', marginVertical: 20 }]}>{t(locale, 'settings.noAccounts')}</Text>
+                ) : (
+                  accounts.map((acc) => {
+                    const isActive = acc.email === activeEmail;
+                    return (
+                      <TouchableOpacity
+                        key={acc.email}
+                        style={[styles.accountItem, { backgroundColor: isActive ? colors.primary + '12' : 'transparent', borderColor: isActive ? colors.primary + '30' : colors.border }]}
+                        onPress={async () => {
+                          if (isActive) return;
+                          setAccountModalVisible(false);
+                          try {
+                            await switchToAccount(acc.email);
+                          } catch (e: any) {
+                            Alert.alert(t(locale, 'common.error'), translateError(e.message));
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.accountAvatar, { backgroundColor: acc.avatarUrl ? 'transparent' : colors.primary + '20' }]}>
+                          {acc.avatarUrl ? (
+                            <Image source={{ uri: acc.avatarUrl }} style={styles.accountAvatarImg} />
+                          ) : (
+                            <Ionicons name="person" size={16} color={colors.primary} />
+                          )}
+                        </View>
+                        <View style={styles.accountInfo}>
+                          <Text style={[styles.accountName, { color: colors.text }]}>{acc.name || acc.email}</Text>
+                          <Text style={[styles.accountEmail, { color: colors.textTertiary }]}>{acc.email}</Text>
+                        </View>
+                        {isActive ? (
+                          <View style={[styles.accountActiveBadge, { backgroundColor: colors.primary }]}>
+                            <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                          </View>
+                        ) : null}
+                        <TouchableOpacity
+                          onPress={() => {
+                            Alert.alert(t(locale, 'settings.removeAccount'), t(locale, 'settings.removeAccountConfirm', { email: acc.email }), [
+                              { text: t(locale, 'common.cancel'), style: 'cancel' },
+                              { text: t(locale, 'settings.remove'), style: 'destructive', onPress: () => removeAccount(acc.email) },
+                            ]);
+                          }}
+                          style={styles.accountRemoveBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="close-outline" size={18} color={colors.textTertiary} />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+                {accounts.length < 5 && (
                   <TouchableOpacity
-                    key={acc.email}
-                    style={[styles.accountItem, { backgroundColor: isActive ? colors.primary + '12' : 'transparent', borderColor: isActive ? colors.primary + '30' : colors.border }]}
-                    onPress={async () => {
-                      if (isActive) return;
-                      try {
-                        await switchToAccount(acc.email);
-                        setAccountModalVisible(false);
-                      } catch (e: any) {
-                        Alert.alert(t(locale, 'common.error'), translateError(e.message));
-                      }
-                    }}
+                    style={[styles.addAccountBtn, { borderColor: colors.primary }]}
+                    onPress={() => { setAddAccountVisible(true); setAddEmail(''); setAddPassword(''); }}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.accountAvatar, { backgroundColor: acc.avatarUrl ? 'transparent' : colors.primary + '20' }]}>
-                      {acc.avatarUrl ? (
-                        <Image source={{ uri: acc.avatarUrl }} style={styles.accountAvatarImg} />
-                      ) : (
-                        <Ionicons name="person" size={16} color={colors.primary} />
-                      )}
-                    </View>
-                    <View style={styles.accountInfo}>
-                      <Text style={[styles.accountName, { color: colors.text }]}>{acc.name || acc.email}</Text>
-                      <Text style={[styles.accountEmail, { color: colors.textTertiary }]}>{acc.email}</Text>
-                    </View>
-                    {isActive ? (
-                      <View style={[styles.accountActiveBadge, { backgroundColor: colors.primary }]}>
-                        <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                      </View>
-                    ) : null}
-                    <TouchableOpacity
-                      onPress={() => {
-                        Alert.alert(t(locale, 'settings.removeAccount'), t(locale, 'settings.removeAccountConfirm', { email: acc.email }), [
-                          { text: t(locale, 'common.cancel'), style: 'cancel' },
-                          { text: t(locale, 'settings.remove'), style: 'destructive', onPress: () => removeAccount(acc.email) },
-                        ]);
-                      }}
-                      style={styles.accountRemoveBtn}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="close-outline" size={18} color={colors.textTertiary} />
-                    </TouchableOpacity>
+                    <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+                    <Text style={[styles.addAccountText, { color: colors.primary }]}>{t(locale, 'settings.addAccount')}</Text>
                   </TouchableOpacity>
-                );
-              })
+                )}
+              </>
             )}
-            {accounts.length < 5 && (
-              <TouchableOpacity
-                style={[styles.addAccountBtn, { borderColor: colors.primary }]}
-                onPress={() => { setAddAccountVisible(true); setAddEmail(''); setAddPassword(''); }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
-                <Text style={[styles.addAccountText, { color: colors.primary }]}>{t(locale, 'settings.addAccount')}</Text>
-              </TouchableOpacity>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal visible={addAccountVisible} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setAddAccountVisible(false)}>
-          <Pressable style={[styles.accountModal, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>{t(locale, 'settings.addAccount')}</Text>
-            <TextInput autoCapitalize="none" autoCorrect={false}
-              style={[styles.addInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
-              placeholder={t(locale, 'common.email')}
-              placeholderTextColor={colors.textTertiary}
-              value={addEmail}
-              onChangeText={setAddEmail}
-              keyboardType="email-address"
-            />
-            <TextInput autoCapitalize="none" autoCorrect={false}
-              style={[styles.addInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
-              placeholder={t(locale, 'common.password')}
-              placeholderTextColor={colors.textTertiary}
-              value={addPassword}
-              onChangeText={setAddPassword}
-              secureTextEntry
-            />
-            <TouchableOpacity
-              style={[styles.addAccountConfirmBtn, { backgroundColor: colors.primary, opacity: addLoading ? 0.7 : 1 }]}
-              onPress={handleAddAccount}
-              disabled={addLoading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.addAccountConfirmText}>{addLoading ? t(locale, 'settings.adding') : t(locale, 'settings.addAndLogin')}</Text>
-            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
@@ -387,7 +388,7 @@ const styles = StyleSheet.create({
   chevron: { fontSize: 22 },
   countValue: { fontSize: 15, fontWeight: '600' },
   divider: { height: 1, marginLeft: 16 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 32 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 32 },
   modalContent: { borderRadius: 16, padding: 24, width: '100%', maxWidth: 320 },
   modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 20 },
   modalOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
@@ -396,11 +397,12 @@ const styles = StyleSheet.create({
   radioInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
   avatarRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
   avatarContainer: { marginRight: 12, position: 'relative' },
+  avatarBorder: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   avatar: { width: 48, height: 48, borderRadius: 24 },
   avatarPlaceholder: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  avatarOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    borderRadius: 24, alignItems: 'center', justifyContent: 'center',
+  avatarEditBadge: {
+    position: 'absolute', top: -2, right: -2, width: 18, height: 18, borderRadius: 9,
+    backgroundColor: '#334155', alignItems: 'center', justifyContent: 'center',
   },
   avatarText: { flex: 1 },
   chevronBtn: { padding: 8 },
@@ -425,4 +427,5 @@ const styles = StyleSheet.create({
   addInput: { width: '100%', height: 44, borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, fontSize: 15, marginBottom: 10 },
   addAccountConfirmBtn: { width: '100%', height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   addAccountConfirmText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  addAccountBackBtn: { width: '100%', height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
 });

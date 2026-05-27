@@ -1,9 +1,9 @@
-import auth from '@react-native-firebase/auth';
+import { auth } from './firebase';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://noteflow-api-q3xo.vercel.app/api';
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const token = await auth().currentUser?.getIdToken();
+  const token = await auth.currentUser?.getIdToken();
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -15,28 +15,35 @@ export async function uploadImage(localUri: string): Promise<string> {
   const ext = fileName.split('.').pop() || 'jpg';
   const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
 
+  const token = await auth.currentUser?.getIdToken();
+
+  const formData = new FormData();
+  formData.append('file', {
+    uri: localUri,
+    type: contentType,
+    name: fileName,
+  } as any);
+
   const res = await fetch(`${BASE_URL}/upload`, {
     method: 'POST',
-    headers: await authHeaders(),
-    body: JSON.stringify({ fileName, contentType }),
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
   });
 
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Error al obtener URL de subida');
+    let errMsg: string;
+    try {
+      const err = await res.json();
+      errMsg = err.error || JSON.stringify(err);
+    } catch {
+      errMsg = await res.text();
+    }
+    throw new Error(`Error al subir la imagen (${res.status}): ${errMsg}`);
   }
 
-  const { signedUrl, publicUrl } = await res.json();
-
-  const blob = await fetch(localUri).then((r) => r.blob());
-
-  const uploadRes = await fetch(signedUrl, {
-    method: 'PUT',
-    body: blob,
-    headers: { 'Content-Type': contentType },
-  });
-
-  if (!uploadRes.ok) throw new Error('Error al subir la imagen a S3');
+  const { publicUrl } = await res.json();
 
   return publicUrl;
 }

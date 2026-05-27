@@ -55,11 +55,16 @@ export default function ChecklistDetailScreen() {
   const editInputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList>(null);
   const hasTitleChanges = useRef(false);
+  const loadedIdRef = useRef<string | null>(null);
   const titleRef = useRef(title);
 
   useLayoutEffect(() => {
     if (checklist) {
-      setTitle(checklist.title);
+      if (checklist.id !== loadedIdRef.current) {
+        loadedIdRef.current = checklist.id;
+        setTitle(checklist.title);
+        hasTitleChanges.current = false;
+      }
       navigation.setOptions({
         title: '',
         headerTransparent: false,
@@ -72,7 +77,7 @@ export default function ChecklistDetailScreen() {
         ),
       });
     }
-  }, [checklist, navigation, colors]);
+  }, [checklist?.id, navigation, colors]);
 
   useEffect(() => { titleRef.current = title; }, [title]);
 

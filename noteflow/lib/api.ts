@@ -1,9 +1,9 @@
-import auth from '@react-native-firebase/auth';
+import { auth } from './firebase';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://noteflow-api-q3xo.vercel.app/api';
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const token = await auth().currentUser?.getIdToken();
+  const token = await auth.currentUser?.getIdToken();
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
