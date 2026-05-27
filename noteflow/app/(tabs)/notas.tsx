@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, RefreshControl } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Spinner } from '@gluestack-ui/themed';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
@@ -78,14 +79,18 @@ export default function NotasScreen() {
         <View style={styles.center}><Text style={[styles.errorText, { color: colors.error }]}>Error: {error}</Text></View>
       ) : isEmpty && showArchived ? (
         <View style={styles.center}>
-          <Text style={[styles.emptyIcon, { color: colors.textTertiary }]}>N</Text>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>{t(locale, 'notas.noArchived')}</Text>
+          <View style={styles.emptyContent}>
+            <Ionicons name="document-text-outline" size={50} color={colors.textTertiary} style={styles.emptyIcon} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>{t(locale, 'notas.noArchived')}</Text>
+          </View>
         </View>
       ) : isEmpty ? (
         <View style={styles.center}>
-          <Text style={[styles.emptyIcon, { color: colors.textTertiary }]}>N</Text>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>{t(locale, 'notas.empty')}</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>{t(locale, 'notas.emptyDesc')}</Text>
+          <View style={styles.emptyContent}>
+            <Ionicons name="document-text-outline" size={50} color={colors.textTertiary} style={styles.emptyIcon} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>{t(locale, 'notas.empty')}</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>{t(locale, 'notas.emptyDesc')}</Text>
+          </View>
         </View>
       ) : (
         <FlashList
@@ -140,6 +145,7 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 44, fontWeight: '800', marginBottom: 16, opacity: 0.25 },
   emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
   emptySubtitle: { fontSize: 14, textAlign: 'center', opacity: 0.7 },
+  emptyContent: { alignItems: 'center', transform: [{ translateY: -40 }] },
   backBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 6 },
   backArrow: { fontSize: 22, fontWeight: '600' },
   backText: { fontSize: 15, fontWeight: '600' },

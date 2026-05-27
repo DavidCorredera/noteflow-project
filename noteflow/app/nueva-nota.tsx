@@ -26,6 +26,8 @@ const PRIORITY_COLORS: Record<ItemPriority, string> = {
   high: '#ef4444',
 };
 
+const IDEA_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b', '#10b981', '#06b6d4', '#6366f1'];
+
 function nextPriority(p: ItemPriority): ItemPriority {
   return PRIORITY_CYCLES[(PRIORITY_CYCLES.indexOf(p) + 1) % PRIORITY_CYCLES.length];
 }
@@ -52,14 +54,20 @@ export default function NuevaNotaScreen() {
   const [noteBody, setNoteBody] = useState('');
   const [noteImages, setNoteImages] = useState<NoteImage[]>([]);
   const [noteSketches, setNoteSketches] = useState<NoteSketch[]>([]);
-  const [tagsInput, setTagsInput] = useState('');
   const [ideaBody, setIdeaBody] = useState('');
+  const [ideaColor, setIdeaColor] = useState(IDEA_COLORS[0]);
+  const [pinned, setPinned] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [editingTagIdx, setEditingTagIdx] = useState<number | null>(null);
+  const [editingTagText, setEditingTagText] = useState('');
   const [checklistItems, setChecklistItems] = useState<{ text: string; priority: ItemPriority }[]>([{ text: '', priority: 'none' }]);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     navigation.setOptions({
+      headerTitle: '',
       headerLeft: () => (
         <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
           <Text style={[styles.headerCancel, { color: colors.textSecondary }]}>{t(locale, 'common.cancel')}</Text>
@@ -77,7 +85,7 @@ export default function NuevaNotaScreen() {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, colors, title, type, noteBody, noteImages, noteSketches, tagsInput, ideaBody, checklistItems, isSaving]);
+    }, [navigation, colors, title, type, noteBody, noteImages, noteSketches, tags, ideaBody, checklistItems, isSaving]);
 
   const handleSave = async () => {
     if (title.trim().length < 3) { setError(t(locale, 'nuevaNota.titleError')); return; }
@@ -100,8 +108,7 @@ export default function NuevaNotaScreen() {
         const items = checklistItems.filter((item) => item.text.trim());
         await addChecklist({ title: title.trim(), items });
       } else if (type === 'idea') {
-        const tagsArray = Array.from(new Set(tagsInput.split(',').map((t: string) => t.trim()).filter(Boolean)));
-        await addIdea({ title: title.trim(), tags: tagsArray, content: ideaBody.trim() || undefined });
+        await addIdea({ title: title.trim(), tags, content: ideaBody.trim() || undefined, color: ideaColor, pinned });
       }
 
       router.back();
@@ -156,13 +163,13 @@ export default function NuevaNotaScreen() {
           ))}
         </View>
 
-        <TextInput autoCapitalize="none" autoCorrect={false}
+        {type !== 'idea' && <TextInput autoCapitalize="none" autoCorrect={false}
           style={[styles.titleInput, { color: colors.text }]}
           value={title}
           onChangeText={(t) => { setTitle(t); setError(''); }}
           placeholder={t(locale, 'nuevaNota.titlePlaceholder')}
           placeholderTextColor={colors.textTertiary}
-        />
+        />}
 
         {type === 'note' && (
           <NoteComposer
@@ -206,6 +213,21 @@ export default function NuevaNotaScreen() {
 
         {type === 'idea' && (
           <View>
+            <View style={[styles.ideaAccentBar, { backgroundColor: ideaColor }]} />
+
+            <View style={styles.ideaTitleRow}>
+              <TextInput autoCapitalize="none" autoCorrect={false}
+                style={[styles.ideaTitleInput, { color: colors.text }]}
+                value={title}
+                onChangeText={(t) => { setTitle(t); setError(''); }}
+                placeholder={t(locale, 'nuevaNota.titlePlaceholder')}
+                placeholderTextColor={colors.textTertiary}
+              />
+              <TouchableOpacity onPress={() => setPinned(!pinned)} style={[styles.ideaPinBtn, { backgroundColor: pinned ? ideaColor + '20' : colors.surface }]} activeOpacity={0.7}>
+                <Ionicons name={pinned ? 'pin' : 'pin-outline'} size={18} color={pinned ? ideaColor : colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+
             <TextInput autoCapitalize="none" autoCorrect={false}
               style={[styles.ideaBodyInput, { color: colors.text }]}
               value={ideaBody}
@@ -228,25 +250,68 @@ export default function NuevaNotaScreen() {
                 </View>
               </View>
             ) : null}
-            <TextInput autoCapitalize="none" autoCorrect={false}
-              style={[styles.tagInput, { color: colors.text }]}
-              value={tagsInput}
-              onChangeText={(t) => { setTagsInput(t); setError(''); }}
-              placeholder={t(locale, 'idea.tagsPlaceholder')}
-              placeholderTextColor={colors.textTertiary}
-            />
-            {tagsInput.trim() ? (
-              <View style={styles.tagPreview}>
-                {tagsInput.split(',').map((t, i) => {
-                  const tag = t.trim();
-                  return tag ? (
-                    <View key={i} style={[styles.tagChip, { backgroundColor: colors.ideaColors[i % colors.ideaColors.length], borderColor: colors.border }]}>
-                      <Text style={[styles.tagChipText, { color: colors.text }]}>{tag}</Text>
-                    </View>
-                  ) : null;
-                })}
+
+            <View style={styles.ideaTagsSection}>
+              <View style={styles.ideaTagsHeader}>
+                <Text style={[styles.ideaTagsLabel, { color: colors.textTertiary }]}>{t(locale, 'common.tags')}</Text>
               </View>
-            ) : null}
+              <View style={styles.ideaTagsContainer}>
+                {tags.map((tag, idx) => (
+                  <View key={`${tag}-${idx}`} style={[styles.ideaTag, { backgroundColor: colors.ideaColors[idx % colors.ideaColors.length] }]}>
+                    {editingTagIdx === idx ? (
+                      <TextInput autoCapitalize="none" autoCorrect={false}
+                        style={[styles.ideaTagEditInput, { color: colors.text }]}
+                        value={editingTagText}
+                        onChangeText={setEditingTagText}
+                        onBlur={() => { if (editingTagText.trim()) { const updated = [...tags]; updated[editingTagIdx] = editingTagText.trim(); setTags(updated); } setEditingTagIdx(null); setEditingTagText(''); }}
+                        onSubmitEditing={() => { if (editingTagText.trim()) { const updated = [...tags]; updated[editingTagIdx] = editingTagText.trim(); setTags(updated); } setEditingTagIdx(null); setEditingTagText(''); }}
+                        returnKeyType="done"
+                      />
+                    ) : (
+                      <TouchableOpacity onPress={() => { setEditingTagIdx(idx); setEditingTagText(tag); }} style={styles.ideaTagTextButton} activeOpacity={0.75}>
+                        <Text style={[styles.ideaTagText, { color: colors.text }]}>{tag}</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => setTags(tags.filter((_, i) => i !== idx))}
+                      style={[styles.ideaTagRemoveBtn, { backgroundColor: isDarkMode ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.12)' }]}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.ideaTagRemove}>x</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.ideaAddTagRow}>
+                <TextInput autoCapitalize="none" autoCorrect={false}
+                  style={[styles.ideaTagInput, { color: colors.text, borderBottomColor: colors.border }]}
+                  value={tagInput}
+                  onChangeText={setTagInput}
+                  onSubmitEditing={() => { const newTag = tagInput.trim(); if (newTag && !tags.includes(newTag)) { setTags([...tags, newTag]); setTagInput(''); } }}
+                  placeholder={t(locale, 'idea.newTag')}
+                  placeholderTextColor={colors.textTertiary}
+                />
+                <TouchableOpacity
+                  onPress={() => { const newTag = tagInput.trim(); if (newTag && !tags.includes(newTag)) { setTags([...tags, newTag]); setTagInput(''); } }}
+                  disabled={!tagInput.trim()}
+                  style={[styles.ideaAddTagBtn, { backgroundColor: ideaColor, opacity: tagInput.trim() ? 1 : 0.45 }]}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.ideaAddTagBtnText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.ideaColorSection}>
+              <Text style={[styles.ideaColorLabel, { color: colors.textTertiary }]}>{t(locale, 'common.color')}</Text>
+              <View style={styles.ideaColorRow}>
+                {IDEA_COLORS.map((c) => (
+                  <TouchableOpacity key={c} onPress={() => setIdeaColor(c)} style={[styles.ideaColorSwatch, { backgroundColor: c }, ideaColor === c && styles.ideaColorSwatchActive, ideaColor === c && { borderColor: c }]} activeOpacity={0.7}>
+                    {ideaColor === c && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </View>
         )}
     </ScrollView>
@@ -269,6 +334,15 @@ const styles = StyleSheet.create({
   checklistBullet: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, marginRight: 14 },
   checklistInput: { flex: 1, fontSize: 16, paddingVertical: 4 },
   prioBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  ideaAccentBar: { height: 4, borderRadius: 2, marginBottom: 20, opacity: 0.6 },
+  ideaTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10 },
+  ideaTitleInput: { flex: 1, fontSize: 26, fontWeight: '800', paddingVertical: 4 },
+  ideaPinBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  ideaColorSection: { marginBottom: 40 },
+  ideaColorLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 },
+  ideaColorRow: { flexDirection: 'row', gap: 14, flexWrap: 'wrap' },
+  ideaColorSwatch: { width: 34, height: 34, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  ideaColorSwatchActive: { borderWidth: 3, borderColor: '#FFFFFF' },
   ideaBodyInput: { fontSize: 16, lineHeight: 24, minHeight: 100, paddingVertical: 4, marginBottom: 8 },
   statsRow: {
     flexDirection: 'row', borderRadius: 12, padding: 12, marginBottom: 16,
@@ -278,8 +352,25 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 16, fontWeight: '800' },
   statLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3, marginTop: 2 },
   statDivider: { width: 1, height: 28 },
-  tagInput: { fontSize: 16, paddingVertical: 4, marginBottom: 12 },
-  tagPreview: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tagChip: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1 },
-  tagChipText: { fontSize: 13, fontWeight: '600' },
+  ideaTagsSection: { marginBottom: 28 },
+  ideaTagsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  ideaTagsLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  ideaTagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
+  ideaTag: {
+    borderRadius: 14, minHeight: 46, paddingLeft: 14, paddingRight: 8, paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center',
+  },
+  ideaTagTextButton: { paddingVertical: 8, paddingRight: 8 },
+  ideaTagText: { fontSize: 15, fontWeight: '600' },
+  ideaTagEditInput: { fontSize: 15, fontWeight: '600', paddingVertical: 8, minWidth: 72, paddingRight: 8 },
+  ideaTagRemoveBtn: {
+    width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginLeft: 2,
+  },
+  ideaTagRemove: { fontSize: 16, lineHeight: 16, color: '#ef4444', fontWeight: '800' },
+  ideaAddTagRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ideaTagInput: { flex: 1, fontSize: 16, paddingVertical: 12, borderBottomWidth: 1, minHeight: 48 },
+  ideaAddTagBtn: {
+    width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+  },
+  ideaAddTagBtnText: { fontSize: 26, color: '#FFFFFF', fontWeight: '400', marginTop: -1 },
 });

@@ -70,6 +70,7 @@ interface NotesStore {
   updateNote: (id: string, data: Partial<Note>) => Promise<void>;
   updateIdea: (id: string, data: Partial<IdeaNote>) => Promise<void>;
   updateChecklist: (id: string, data: Partial<ChecklistNote>) => Promise<void>;
+  resetNotes: () => void;
 }
 
 export const useNotesStore = create<NotesStore>((set, get) => ({
@@ -331,4 +332,6 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }));
     toggleChecklistItemApi(itemId, !currentStatus).catch(() => {});
   },
+
+  resetNotes: () => set({ notes: [], checklists: [], ideas: [], isLoading: false, error: null }),
 }));

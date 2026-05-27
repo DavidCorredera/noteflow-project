@@ -14,9 +14,13 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.davidcorredera.noteflow",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
+      "package": "com.davidcorredera.noteflow",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -29,7 +33,36 @@
     },
     "plugins": [
       "expo-router",
-      "expo-localization"
-    ]
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "NoteFlow necesita acceso a tu galería para adjuntar imágenes a las notas.",
+          "cameraPermission": "NoteFlow necesita acceso a la cámara para tomar fotos y adjuntarlas a las notas."
+        }
+      ],
+      "@react-native-firebase/app",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          },
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "35.0.0"
+          }
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0cc304f0-5b21-437c-b948-3cf2dc398329"
+      }
+    },
+    "owner": "davidcorredera"
   }
 }

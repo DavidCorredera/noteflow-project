@@ -1,11 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Image, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { AppColors } from '../../constants/theme';
 import { useLocaleStore } from '../../store/localeStore';
 import { t } from '../../i18n';
 import ImageViewer from '../ImageViewer';
+import { uploadImage } from '../../lib/upload';
 import {
   NOTE_INDEX_TOKEN,
   NoteImage,
@@ -77,7 +78,7 @@ export default function NoteComposer({
   images = [],
 }: Props) {
   const locale = useLocaleStore((s) => s.locale);
-  const [mode, setMode] = useState<'edit' | 'preview'>('preview');
+  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [sketchTools, setSketchTools] = useState<Record<string, ToolState>>({});
   const [activeToolTab, setActiveToolTab] = useState<Record<string, 'color' | 'width' | 'eraser' | null>>({});
   const [panelHeights, setPanelHeights] = useState<Record<string, number>>({});
@@ -92,6 +93,7 @@ export default function NoteComposer({
   const words = useMemo(() => countWords(body), [body]);
   const characters = useMemo(() => countCharacters(body), [body]);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const actualPlaceholder = placeholder || t(locale, 'notas.placeholder');
 
@@ -196,24 +198,48 @@ export default function NoteComposer({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.4,
-      base64: true,
     });
     if (result.canceled || result.assets.length === 0) return;
-    const asset = result.assets[0];
-    if (!asset.base64) return;
+    await handleImageResult(result.assets[0]);
+  };
+
+  const takePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(t(locale, 'notas.permissionTitle'), t(locale, 'notas.permissionMsg'));
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.4,
+    });
+    if (result.canceled || result.assets.length === 0) return;
+    await handleImageResult(result.assets[0]);
+  };
+
+  const handleImageResult = async (asset: ImagePicker.ImagePickerAsset) => {
     try {
-      const mime = asset.mimeType || 'image/jpeg';
-      const dataUri = `data:${mime};base64,${asset.base64}`;
+      setUploadingImage(true);
+      const publicUrl = await uploadImage(asset.uri);
       const img: NoteImage = {
         id: createNoteEntityId('img'),
-        uri: dataUri,
+        uri: publicUrl,
         width: asset.width || 0,
         height: asset.height || 0,
       };
       onImagesChange?.([...images, img]);
     } catch {
       Alert.alert(t(locale, 'common.error'), t(locale, 'notas.imageError'));
+    } finally {
+      setUploadingImage(false);
     }
+  };
+
+  const showImagePicker = () => {
+    Alert.alert('Añadir imagen', 'Elige una opción', [
+      { text: 'Galería', onPress: pickImage },
+      { text: 'Cámara', onPress: takePhoto },
+      { text: t(locale, 'common.cancel'), style: 'cancel' },
+    ]);
   };
 
   const removeImage = (imageId: string) => {
@@ -245,7 +271,7 @@ export default function NoteComposer({
       { icon: 'document-text-outline', onPress: insertTemplate },
     ],
     [
-      { icon: 'image-outline', label: '+', onPress: pickImage },
+      { icon: 'image-outline', label: '+', onPress: showImagePicker },
       { icon: 'color-palette-outline', label: '+', onPress: addSketch },
     ],
   ];

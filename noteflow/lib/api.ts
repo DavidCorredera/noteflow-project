@@ -1,8 +1,15 @@
-// Si estás probando en un emulador de Android físico o local, 
-// localhost a veces da problemas. Si es así, cambia localhost por la IP de tu ordenador.
+import auth from '@react-native-firebase/auth';
+
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://noteflow-api-q3xo.vercel.app/api';
 
-// Tipos básicos para que TypeScript no se queje (ajústalos según tus tipos reales)
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await auth().currentUser?.getIdToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 export type CreateNoteInput = {
   title: string;
   type: 'note' | 'checklist' | 'idea';
@@ -12,7 +19,7 @@ export type CreateNoteInput = {
 };
 
 export async function getNotes() {
-  const res = await fetch(`${BASE_URL}/notes`);
+  const res = await fetch(`${BASE_URL}/notes`, { headers: await authHeaders() });
   if (!res.ok) throw new Error('Error al cargar notas');
   return res.json();
 }
@@ -20,7 +27,7 @@ export async function getNotes() {
 export async function createNote(data: CreateNoteInput) {
   const res = await fetch(`${BASE_URL}/notes`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Error al crear nota');
@@ -28,7 +35,10 @@ export async function createNote(data: CreateNoteInput) {
 }
 
 export async function deleteNoteApi(id: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/notes/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE_URL}/notes/${id}`, {
+    method: 'DELETE',
+    headers: await authHeaders(),
+  });
   if (!res.ok) throw new Error('Error al borrar nota');
 }
 
@@ -37,7 +47,7 @@ export async function addChecklistItemApi(noteId: string, text: string, priority
   if (priority && priority !== 'none') body.priority = priority;
   const res = await fetch(`${BASE_URL}/notes/${noteId}/checklist-items`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error('Error al añadir ítem');
@@ -47,7 +57,7 @@ export async function addChecklistItemApi(noteId: string, text: string, priority
 export async function toggleChecklistItemApi(itemId: string, isCompleted: boolean) {
   const res = await fetch(`${BASE_URL}/checklist-items/${itemId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify({ is_completed: isCompleted }),
   });
   if (!res.ok) throw new Error('Error al actualizar ítem');
@@ -57,7 +67,7 @@ export async function toggleChecklistItemApi(itemId: string, isCompleted: boolea
 export async function updateChecklistItemApi(itemId: string, data: { text?: string; priority?: string; is_completed?: boolean }) {
   const res = await fetch(`${BASE_URL}/checklist-items/${itemId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Error al actualizar ítem');
@@ -67,6 +77,7 @@ export async function updateChecklistItemApi(itemId: string, data: { text?: stri
 export async function deleteChecklistItemApi(itemId: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/checklist-items/${itemId}`, {
     method: 'DELETE',
+    headers: await authHeaders(),
   });
   if (!res.ok) throw new Error('Error al borrar ítem');
 }
@@ -74,7 +85,7 @@ export async function deleteChecklistItemApi(itemId: string): Promise<void> {
 export async function updateNoteApi(id: string, data: Partial<{ title: string; content: string; tags: string[]; color: string; archived: boolean }>) {
   const res = await fetch(`${BASE_URL}/notes/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Error al actualizar nota');

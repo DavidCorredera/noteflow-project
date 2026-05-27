@@ -5,11 +5,14 @@ import { config } from '../gluestack-ui.config';
 import { useThemeStore } from '../store/themeStore';
 import { useNotesStore } from '../store/notesStore';
 import { useLocaleStore } from '../store/localeStore';
+import { useAuthStore } from '../store/authStore';
+import { useAccountStore } from '../store/accountStore';
 import { getColors } from '../constants/theme';
 import { t } from '../i18n';
-import { Platform, View } from 'react-native';
+import { Platform, View, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import auth from '@react-native-firebase/auth';
 
 function useScreenOptions() {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
@@ -44,6 +47,12 @@ export default function RootLayout() {
   const locale = useLocaleStore((s) => s.locale);
   const screenOptions = useScreenOptions();
   const colors = getColors(isDarkMode);
+  const setUser = useAuthStore((s) => s.setUser);
+  const authInitialized = useAuthStore((s) => s.initialized);
+  const setInitialized = useAuthStore((s) => s.setInitialized);
+  const setLoading = useAuthStore((s) => s.setLoading);
+  const loadProfile = useAuthStore((s) => s.loadProfile);
+  const loadAccounts = useAccountStore((s) => s.loadAccounts);
 
   const fetchNotes = useNotesStore((s) => s.fetchNotes);
 
@@ -53,13 +62,29 @@ export default function RootLayout() {
     if (loaded && localeLoaded) fetchNotes();
   }, [loaded, localeLoaded]);
 
-  if (!loaded || !localeLoaded) return null;
+  useEffect(() => {
+    const unsubscribe = auth().onAuthStateChanged(async (user) => {
+      setUser(user);
+      if (user) {
+        await loadProfile(user.uid);
+      }
+      setLoading(false);
+      if (!authInitialized) {
+        setInitialized(true);
+        loadAccounts();
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  if (!loaded || !localeLoaded || !authInitialized) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <GluestackUIProvider config={config} colorMode={isDarkMode ? 'dark' : 'light'}>
         <Stack screenOptions={screenOptions}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="nueva-nota"
