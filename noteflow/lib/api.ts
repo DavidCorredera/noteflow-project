@@ -16,6 +16,9 @@ export type CreateNoteInput = {
   content?: string;
   color?: string;
   tags?: string[];
+  reminderDate?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 export async function getNotes() {
@@ -82,7 +85,7 @@ export async function deleteChecklistItemApi(itemId: string): Promise<void> {
   if (!res.ok) throw new Error('Error al borrar ítem');
 }
 
-export async function updateNoteApi(id: string, data: Partial<{ title: string; content: string; tags: string[]; color: string; archived: boolean }>) {
+export async function updateNoteApi(id: string, data: Partial<{ title: string; content: string; tags: string[]; color: string; archived: boolean; reminderDate: string; latitude: number; longitude: number }>) {
   const res = await fetch(`${BASE_URL}/notes/${id}`, {
     method: 'PATCH',
     headers: await authHeaders(),

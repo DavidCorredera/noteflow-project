@@ -4,6 +4,9 @@ export interface BaseNote {
   createdAt: Date;
   updatedAt: Date;
   archived?: boolean;
+  reminderDate?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Note extends BaseNote { 

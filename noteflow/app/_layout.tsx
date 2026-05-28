@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { GluestackUIProvider } from '@gluestack-ui/themed';
 import { config } from '../gluestack-ui.config';
@@ -9,10 +9,11 @@ import { useAuthStore } from '../store/authStore';
 import { useAccountStore } from '../store/accountStore';
 import { getColors } from '../constants/theme';
 import { t } from '../i18n';
-import { Platform, View, ActivityIndicator } from 'react-native';
+import { Platform, View, ActivityIndicator, Animated, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { auth } from '../lib/firebase';
+import '../lib/notifications';
 
 function useScreenOptions() {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
@@ -55,6 +56,27 @@ export default function RootLayout() {
   const loadAccounts = useAccountStore((s) => s.loadAccounts);
 
   const fetchNotes = useNotesStore((s) => s.fetchNotes);
+
+  const prevDark = useRef(isDarkMode);
+  const [showFade, setShowFade] = useState(false);
+  const [overlayColor, setOverlayColor] = useState(colors.background);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (prevDark.current !== isDarkMode) {
+      const oldColors = getColors(prevDark.current);
+      setOverlayColor(oldColors.background);
+      prevDark.current = isDarkMode;
+      
+      setShowFade(true);
+      fadeAnim.setValue(1);
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setShowFade(false));
+    }
+  }, [isDarkMode]);
 
   useEffect(() => { load(); loadLocale(); }, []);
 
@@ -105,6 +127,12 @@ export default function RootLayout() {
           <Stack.Screen name="feedback" options={{ title: t(locale, 'feedback.title'), headerTransparent: false, headerStyle: { backgroundColor: colors.background }, ...detailScreenOptions }} />
         </Stack>
       </GluestackUIProvider>
+      {showFade && (
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor, opacity: fadeAnim, zIndex: 9999 }]}
+        />
+      )}
     </GestureHandlerRootView>
   );
 }

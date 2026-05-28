@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Spinner } from '@gluestack-ui/themed';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
@@ -99,17 +100,19 @@ export default function NotasScreen() {
             <View style={styles.gridRow}>
               {row.map((note) => (
                 <View key={note.id} style={styles.gridCell}>
-                  <SwipeableRow
-                    variant="icons"
-                    archived={!!note.archived}
-                    onArchive={() => archiveNote(note.id)}
-                    onRestore={() => restoreNote(note.id)}
-                    onDelete={() => deleteNote(note.id)}
-                    onEdit={() => router.push(`/notas/${note.id}` as any)}
-                    colors={colors}
-                  >
-                    <NoteCard note={note} onPress={() => router.push(`/notas/${note.id}` as any)} colors={colors} />
-                  </SwipeableRow>
+                    <Animated.View entering={FadeInDown}>
+                      <SwipeableRow
+                        variant="icons"
+                        archived={!!note.archived}
+                        onArchive={() => archiveNote(note.id)}
+                        onRestore={() => restoreNote(note.id)}
+                        onDelete={() => deleteNote(note.id)}
+                        onEdit={() => router.push(`/notas/${note.id}` as any)}
+                        colors={colors}
+                      >
+                        <NoteCard note={note} onPress={() => router.push(`/notas/${note.id}` as any)} colors={colors} />
+                      </SwipeableRow>
+                    </Animated.View>
                 </View>
               ))}
               {row.length === 1 && <View style={styles.gridCell} />}

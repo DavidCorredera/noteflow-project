@@ -236,6 +236,13 @@ export const en = {
   'dashboard.today': 'Today',
   'dashboard.yesterday': 'Yesterday',
 
+  'nuevaNota.reminder': 'REMINDER',
+  'nuevaNota.tomorrow': 'Tomorrow',
+  'nuevaNota.nextWeek': 'Next week',
+  'nuevaNota.reminderSet': 'Reminder set',
+  'nuevaNota.addLocation': 'Add location',
+  'nuevaNota.locationSet': 'Location set',
+
   'feedback.subtitle': 'Your suggestions, ideas or bug reports are welcome.',
   'feedback.send': 'Send feedback',
   'feedback.sentTitle': 'Sent',

@@ -11,6 +11,8 @@ import NoteComposer from '../components/notes/NoteComposer';
 import { NoteImage, NoteSketch, serializeNoteContent } from '../lib/noteContent';
 import { useLocaleStore } from '../store/localeStore';
 import { t } from '../i18n';
+import { scheduleReminder } from '../lib/notifications';
+import { getCurrentLocation } from '../lib/location';
 
 const PRIORITY_CYCLES: ItemPriority[] = ['none', 'low', 'medium', 'high'];
 const PRIORITY_ICONS: Record<ItemPriority, keyof typeof Ionicons.glyphMap> = {
@@ -64,6 +66,9 @@ export default function NuevaNotaScreen() {
   const [checklistItems, setChecklistItems] = useState<{ text: string; priority: ItemPriority }[]>([{ text: '', priority: 'none' }]);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [reminderDate, setReminderDate] = useState<Date | null>(null);
+  const [locationData, setLocationData] = useState<{ latitude: number; longitude: number; name: string | null } | null>(null);
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     navigation.setOptions({
@@ -93,6 +98,7 @@ export default function NuevaNotaScreen() {
 
     try {
       setIsSaving(true);
+      const reminderDateStr = reminderDate?.toISOString();
       if (type === 'note') {
         if (!noteBody.trim() && noteSketches.length === 0) { setError(t(locale, 'nuevaNota.bodyError')); return; }
         await addNote({
@@ -103,12 +109,19 @@ export default function NuevaNotaScreen() {
             sketches: noteSketches,
             images: noteImages,
           }),
+          reminderDate: reminderDateStr,
+          latitude: locationData?.latitude,
+          longitude: locationData?.longitude,
         });
       } else if (type === 'checklist') {
         const items = checklistItems.filter((item) => item.text.trim());
-        await addChecklist({ title: title.trim(), items });
+        await addChecklist({ title: title.trim(), items, reminderDate: reminderDateStr, latitude: locationData?.latitude, longitude: locationData?.longitude });
       } else if (type === 'idea') {
-        await addIdea({ title: title.trim(), tags, content: ideaBody.trim() || undefined, color: ideaColor, pinned });
+        await addIdea({ title: title.trim(), tags, content: ideaBody.trim() || undefined, color: ideaColor, pinned, reminderDate: reminderDateStr, latitude: locationData?.latitude, longitude: locationData?.longitude });
+      }
+
+      if (reminderDate) {
+        await scheduleReminder(title.trim(), reminderDate);
       }
 
       router.back();
@@ -314,6 +327,64 @@ export default function NuevaNotaScreen() {
             </View>
           </View>
         )}
+
+        {/* Reminder section */}
+        <View style={[styles.section, { marginTop: 24 }]}>
+          <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>{t(locale, 'nuevaNota.reminder')}</Text>
+          <View style={styles.reminderRow}>
+            {[
+              { label: '1h', getDate: () => new Date(Date.now() + 3600000) },
+              { label: '3h', getDate: () => new Date(Date.now() + 10800000) },
+              { label: t(locale, 'nuevaNota.tomorrow'), getDate: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
+              { label: t(locale, 'nuevaNota.nextWeek'), getDate: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(9, 0, 0, 0); return d; } },
+            ].map((opt) => {
+              const optDate = opt.getDate();
+              const isActive = reminderDate && Math.abs(reminderDate.getTime() - optDate.getTime()) < 60000;
+              return (
+                <TouchableOpacity
+                  key={opt.label}
+                  onPress={() => setReminderDate(isActive ? null : optDate)}
+                  style={[styles.reminderChip, { backgroundColor: isActive ? colors.primary : colors.surface, borderColor: isActive ? colors.primary : colors.border }]}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.reminderChipText, { color: isActive ? '#FFFFFF' : colors.textSecondary }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            {reminderDate && (
+              <TouchableOpacity onPress={() => setReminderDate(null)} style={styles.reminderClear} activeOpacity={0.7}>
+                <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+          {reminderDate && (
+            <Text style={[styles.reminderDateText, { color: colors.primary }]}>
+              {t(locale, 'nuevaNota.reminderSet')}: {reminderDate.toLocaleDateString(locale === 'es' ? 'es-ES' : 'en-US', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          )}
+        </View>
+
+        {/* Location section */}
+        <View style={[styles.section, { marginTop: 16 }]}>
+          <TouchableOpacity
+            onPress={async () => {
+              if (locationData) { setLocationData(null); return; }
+              setLocating(true);
+              const loc = await getCurrentLocation();
+              if (loc) setLocationData(loc);
+              setLocating(false);
+            }}
+            style={[styles.locationBtn, { backgroundColor: locationData ? colors.primary + '15' : colors.surface, borderColor: locationData ? colors.primary + '30' : colors.border }]}
+            activeOpacity={0.7}
+            disabled={locating}
+          >
+            <Ionicons name={locating ? 'hourglass-outline' : locationData ? 'location' : 'location-outline'} size={18} color={locationData ? colors.primary : colors.textSecondary} />
+            <Text style={[styles.locationBtnText, { color: locationData ? colors.primary : colors.textSecondary }]}>
+              {locating ? t(locale, 'common.loading') : locationData ? (locationData.name || t(locale, 'nuevaNota.locationSet')) : t(locale, 'nuevaNota.addLocation')}
+            </Text>
+            {locationData && <Ionicons name="close-circle" size={18} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />}
+          </TouchableOpacity>
+        </View>
     </ScrollView>
   );
 }
@@ -373,4 +444,16 @@ const styles = StyleSheet.create({
     width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
   },
   ideaAddTagBtnText: { fontSize: 26, color: '#FFFFFF', fontWeight: '400', marginTop: -1 },
+  section: { marginBottom: 8 },
+  sectionLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
+  reminderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  reminderChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  reminderChipText: { fontSize: 13, fontWeight: '600' },
+  reminderClear: { padding: 4 },
+  reminderDateText: { fontSize: 12, fontWeight: '500', marginTop: 8 },
+  locationBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
+  },
+  locationBtnText: { fontSize: 14, fontWeight: '500' },
 });

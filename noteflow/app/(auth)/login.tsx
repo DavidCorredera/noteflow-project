@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../lib/firebase';
 import { useThemeStore } from '../../store/themeStore';
 import { useAuthStore } from '../../store/authStore';
+import { useAccountStore } from '../../store/accountStore';
 import { getColors } from '../../constants/theme';
 import { useLocaleStore } from '../../store/localeStore';
 import { t } from '../../i18n';
@@ -29,6 +30,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
+      await useAccountStore.getState().saveCurrentAccountCredentials(email.trim(), password);
       router.replace('/(tabs)/dashboard');
     } catch (e: any) {
       const code = e?.code || '';

@@ -29,9 +29,9 @@ async function savePriorities(priorities: Record<string, ItemPriority>) {
   } catch {}
 }
 
-type NewNoteInput = Pick<Note, 'title' | 'content'>;
-type NewChecklistInput = Pick<ChecklistNote, 'title'> & { items?: { text: string; priority?: ItemPriority }[] };
-type NewIdeaInput = Pick<IdeaNote, 'title' | 'tags'> & Partial<Pick<IdeaNote, 'color' | 'content' | 'pinned'>>;
+type NewNoteInput = Pick<Note, 'title' | 'content'> & { reminderDate?: string; latitude?: number; longitude?: number };
+type NewChecklistInput = Pick<ChecklistNote, 'title'> & { items?: { text: string; priority?: ItemPriority }[]; reminderDate?: string; latitude?: number; longitude?: number };
+type NewIdeaInput = Pick<IdeaNote, 'title' | 'tags'> & Partial<Pick<IdeaNote, 'color' | 'content' | 'pinned'>> & { reminderDate?: string; latitude?: number; longitude?: number };
 
 const normalizeChecklistItem = (item: any): ChecklistItem => ({
   ...item,
@@ -122,7 +122,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   addChecklist: async (note) => {
     try {
-      const res = await createNote({ title: note.title, type: 'checklist' });
+      const res = await createNote({ title: note.title, type: 'checklist', reminderDate: note.reminderDate, latitude: note.latitude, longitude: note.longitude });
       let newChecklist = normalizeNote(res);
       const itemList = (note.items ?? []).map((item) => typeof item === 'string' ? { text: item, priority: undefined } : item).filter((i) => i.text.trim());
       let partialSaveError: string | null = null;

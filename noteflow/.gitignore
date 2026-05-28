@@ -31,6 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -39,3 +40,16 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# IDE
+.idea/
+.vscode/
+
+# misc
+emojis fuera.txt
+noteflow-api/
+
+# sensitive config
+GoogleService-Info.plist
+google-services.json
+lib/env.ts

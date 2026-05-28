@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Spinner } from '@gluestack-ui/themed';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
@@ -85,7 +86,7 @@ export default function ChecklistsScreen() {
         <FlashList
           data={source}
           renderItem={({ item: checklist }) => (
-            <View style={{ marginHorizontal: 20, marginBottom: 10 }}>
+            <Animated.View entering={FadeInDown} style={{ marginHorizontal: 20, marginBottom: 10 }}>
               <SwipeableRow
                 variant="icons-horizontal"
                 archived={!!checklist.archived}
@@ -97,7 +98,7 @@ export default function ChecklistsScreen() {
               >
                 <ChecklistCard note={checklist} onPress={() => router.push(`/checklists/${checklist.id}` as any)} colors={colors} mode="full" />
               </SwipeableRow>
-            </View>
+            </Animated.View>
           )}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={

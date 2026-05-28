@@ -5,7 +5,8 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "preBuildCommand": "if [ -n \"$GOOGLE_SERVICES_JSON\" ]; then cp \"$GOOGLE_SERVICES_JSON\" ./google-services.json; fi"
     },
     "preview": {
       "distribution": "internal"

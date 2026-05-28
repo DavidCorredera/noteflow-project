@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { FIREBASE_API_KEY } from './env';
 
 type NativeAuth = ReturnType<typeof import('@react-native-firebase/auth').default>;
 type NativeFirestore = ReturnType<typeof import('@react-native-firebase/firestore').default>;
@@ -85,7 +86,7 @@ if (isNative) {
   const ReactNativeAsyncStorage = require('@react-native-async-storage/async-storage').default;
 
   const firebaseConfig = {
-    apiKey: 'REVOKED',
+    apiKey: FIREBASE_API_KEY,
     authDomain: 'noteflow-86105.firebaseapp.com',
     projectId: 'noteflow-86105',
     storageBucket: 'noteflow-86105.firebasestorage.app',

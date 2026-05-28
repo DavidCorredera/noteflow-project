@@ -16,6 +16,7 @@ interface AccountState {
   loaded: boolean;
   loadAccounts: () => Promise<void>;
   addAccount: (email: string, password: string) => Promise<void>;
+  saveCurrentAccountCredentials: (email: string, password: string) => Promise<void>;
   switchToAccount: (email: string) => Promise<void>;
   removeAccount: (email: string) => Promise<void>;
   updateAccountProfile: (email: string, data: Partial<Pick<SavedAccount, 'name' | 'avatarUrl'>>) => Promise<void>;
@@ -138,6 +139,35 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     await saveToStorage(updated);
     useNotesStore.getState().resetNotes();
     await useNotesStore.getState().fetchNotes();
+    set({ accounts: updated, activeEmail: email });
+  },
+
+  saveCurrentAccountCredentials: async (email, password) => {
+    const state = get();
+    const existing = state.accounts.find((a) => a.email === email);
+
+    if (existing) {
+      const updated = state.accounts.map((a) =>
+        a.email === email ? { ...a, password } : a
+      );
+      await saveToStorage(updated);
+      set({ accounts: updated });
+      return;
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.email !== email) return;
+
+    const profile = await loadProfileOnce(currentUser.uid);
+    const newAccount: SavedAccount = {
+      email,
+      password,
+      uid: currentUser.uid,
+      name: profile?.name || '',
+      avatarUrl: profile?.avatarUrl || null,
+    };
+    const updated = [...state.accounts, newAccount];
+    await saveToStorage(updated);
     set({ accounts: updated, activeEmail: email });
   },
 

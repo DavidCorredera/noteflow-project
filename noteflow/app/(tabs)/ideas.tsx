@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Spinner } from '@gluestack-ui/themed';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
@@ -97,17 +98,19 @@ export default function IdeasScreen() {
             <View style={styles.gridRow}>
               {row.map((idea) => (
                 <View key={idea.id} style={styles.gridCell}>
-                  <SwipeableRow
-                    variant="icons"
-                    archived={!!idea.archived}
-                    onArchive={() => archiveNote(idea.id)}
-                    onRestore={() => restoreNote(idea.id)}
-                    onDelete={() => deleteNote(idea.id)}
-                    onEdit={() => router.push(`/ideas/${idea.id}` as any)}
-                    colors={colors}
-                  >
-                    <IdeaCard note={idea} onPress={() => router.push(`/ideas/${idea.id}` as any)} colors={colors} />
-                  </SwipeableRow>
+                  <Animated.View entering={FadeInDown}>
+                    <SwipeableRow
+                      variant="icons"
+                      archived={!!idea.archived}
+                      onArchive={() => archiveNote(idea.id)}
+                      onRestore={() => restoreNote(idea.id)}
+                      onDelete={() => deleteNote(idea.id)}
+                      onEdit={() => router.push(`/ideas/${idea.id}` as any)}
+                      colors={colors}
+                    >
+                      <IdeaCard note={idea} onPress={() => router.push(`/ideas/${idea.id}` as any)} colors={colors} />
+                    </SwipeableRow>
+                  </Animated.View>
                 </View>
               ))}
               {row.length === 1 && <View style={styles.gridCell} />}

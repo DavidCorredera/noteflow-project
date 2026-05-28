@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useNotesStore } from '../../store/notesStore';
 import { useThemeStore } from '../../store/themeStore';
@@ -133,7 +134,9 @@ export default function DashboardScreen() {
         ) : (
           <View style={{ gap: 8 }}>
             {allRecent.map((item: any) => (
-              <RecentItem key={item.id} item={item} type={item._type} onPress={() => router.push(`/${item._type === 'checklist' ? 'checklists' : item._type === 'idea' ? 'ideas' : 'notas'}/${item.id}` as any)} colors={colors} locale={locale} />
+              <Animated.View key={item.id} entering={FadeInDown}>
+                <RecentItem item={item} type={item._type} onPress={() => router.push(`/${item._type === 'checklist' ? 'checklists' : item._type === 'idea' ? 'ideas' : 'notas'}/${item.id}` as any)} colors={colors} locale={locale} />
+              </Animated.View>
             ))}
           </View>
         )}

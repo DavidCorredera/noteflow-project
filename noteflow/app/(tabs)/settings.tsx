@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Image, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, Modal, Pressable, Platform } from 'react-native';
+import { View, Text, TextInput, Image, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, Modal, Pressable, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -63,7 +63,7 @@ export default function SettingsScreen() {
   const [addEmail, setAddEmail] = useState('');
   const [addPassword, setAddPassword] = useState('');
   const [addLoading, setAddLoading] = useState(false);
-
+  const [switching, setSwitching] = useState(false);
 
   const handleAvatarPress = () => {
     Alert.alert(t(locale, 'settings.changePhoto'), '', [
@@ -107,6 +107,7 @@ export default function SettingsScreen() {
       setAddEmail('');
       setAddPassword('');
       setAccountModalVisible(false);
+      router.replace('/(tabs)/dashboard');
     } catch (e: any) {
       const knownErrors: Record<string, string> = {
         'Máximo de 5 cuentas permitidas': 'settings.maxAccounts',
@@ -146,7 +147,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
+    <View style={{ flex: 1 }}>
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
       <ScreenHeader title={t(locale, 'settings.title')} colors={colors} />
 
       <View style={[styles.section, { marginTop: 16 }]}>
@@ -276,10 +278,14 @@ export default function SettingsScreen() {
                         onPress={async () => {
                           if (isActive) return;
                           setAccountModalVisible(false);
+                          setSwitching(true);
                           try {
                             await switchToAccount(acc.email);
+                            router.replace('/(tabs)/dashboard');
                           } catch (e: any) {
                             Alert.alert(t(locale, 'common.error'), translateError(e.message));
+                          } finally {
+                            setSwitching(false);
                           }
                         }}
                         activeOpacity={0.7}
@@ -371,7 +377,13 @@ export default function SettingsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+      {switching && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )}
+    </View>
   );
 }
 

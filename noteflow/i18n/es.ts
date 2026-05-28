@@ -236,6 +236,13 @@ export const es = {
   'dashboard.today': 'Hoy',
   'dashboard.yesterday': 'Ayer',
 
+  'nuevaNota.reminder': 'RECORDATORIO',
+  'nuevaNota.tomorrow': 'Mañana',
+  'nuevaNota.nextWeek': 'Próxima semana',
+  'nuevaNota.reminderSet': 'Recordatorio',
+  'nuevaNota.addLocation': 'Añadir ubicación',
+  'nuevaNota.locationSet': 'Ubicación añadida',
+
   'feedback.subtitle': 'Tus sugerencias, ideas o reportes de errores son bienvenidos.',
   'feedback.send': 'Enviar feedback',
   'feedback.sentTitle': 'Enviado',

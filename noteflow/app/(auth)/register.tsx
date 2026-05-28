@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeStore } from '../../store/themeStore';
 import { useAuthStore } from '../../store/authStore';
+import { useAccountStore } from '../../store/accountStore';
 import { getColors } from '../../constants/theme';
 import { useLocaleStore } from '../../store/localeStore';
 import { t } from '../../i18n';
@@ -33,6 +34,7 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await register(email.trim(), password, name.trim());
+      await useAccountStore.getState().saveCurrentAccountCredentials(email.trim(), password);
       router.replace('/(tabs)/dashboard');
     } catch (e: any) {
       Alert.alert(t(locale, 'common.error'), e.message || t(locale, 'auth.registerError'));
