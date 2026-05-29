@@ -29,9 +29,9 @@ async function savePriorities(priorities: Record<string, ItemPriority>) {
   } catch {}
 }
 
-type NewNoteInput = Pick<Note, 'title' | 'content'> & { reminderDate?: string; latitude?: number; longitude?: number };
-type NewChecklistInput = Pick<ChecklistNote, 'title'> & { items?: { text: string; priority?: ItemPriority }[]; reminderDate?: string; latitude?: number; longitude?: number };
-type NewIdeaInput = Pick<IdeaNote, 'title' | 'tags'> & Partial<Pick<IdeaNote, 'color' | 'content' | 'pinned'>> & { reminderDate?: string; latitude?: number; longitude?: number };
+type NewNoteInput = Pick<Note, 'title' | 'content'> & { reminderDate?: string; latitude?: number; longitude?: number; folderId?: string };
+type NewChecklistInput = Pick<ChecklistNote, 'title'> & { items?: { text: string; priority?: ItemPriority }[]; reminderDate?: string; latitude?: number; longitude?: number; folderId?: string };
+type NewIdeaInput = Pick<IdeaNote, 'title' | 'tags'> & Partial<Pick<IdeaNote, 'color' | 'content' | 'pinned'>> & { reminderDate?: string; latitude?: number; longitude?: number; folderId?: string };
 
 const normalizeChecklistItem = (item: any): ChecklistItem => ({
   ...item,
@@ -42,6 +42,7 @@ const normalizeChecklistItem = (item: any): ChecklistItem => ({
 
 const normalizeNote = (note: any) => ({
   ...note,
+  folderId: note.folder_id ?? note.folderId ?? undefined,
   createdAt: new Date(note.created_at ?? note.createdAt),
   updatedAt: new Date(note.updated_at ?? note.updatedAt),
   items: (note.items ?? []).map((item: any) => normalizeChecklistItem(item)),
@@ -71,6 +72,7 @@ interface NotesStore {
   updateIdea: (id: string, data: Partial<IdeaNote>) => Promise<void>;
   updateChecklist: (id: string, data: Partial<ChecklistNote>) => Promise<void>;
   resetNotes: () => void;
+  moveToFolder: (id: string, folderId: string | null, type: 'note' | 'checklist' | 'idea') => Promise<void>;
 }
 
 export const useNotesStore = create<NotesStore>((set, get) => ({
@@ -122,7 +124,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   addChecklist: async (note) => {
     try {
-      const res = await createNote({ title: note.title, type: 'checklist', reminderDate: note.reminderDate, latitude: note.latitude, longitude: note.longitude });
+      const res = await createNote({ title: note.title, type: 'checklist', reminderDate: note.reminderDate, latitude: note.latitude, longitude: note.longitude, folderId: note.folderId });
       let newChecklist = normalizeNote(res);
       const itemList = (note.items ?? []).map((item) => typeof item === 'string' ? { text: item, priority: undefined } : item).filter((i) => i.text.trim());
       let partialSaveError: string | null = null;
@@ -331,6 +333,20 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       ),
     }));
     toggleChecklistItemApi(itemId, !currentStatus).catch(() => {});
+  },
+
+  moveToFolder: async (id: string, folderId: string | null, type: 'note' | 'checklist' | 'idea') => {
+    set((state) => {
+      const updater = (items: any[]) => items.map((n) => n.id === id ? { ...n, folderId } : n);
+      if (type === 'note') return { notes: updater(state.notes) };
+      if (type === 'checklist') return { checklists: updater(state.checklists) };
+      return { ideas: updater(state.ideas) };
+    });
+    try {
+      await updateNoteApi(id, { folderId });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
   },
 
   resetNotes: () => set({ notes: [], checklists: [], ideas: [], isLoading: false, error: null }),

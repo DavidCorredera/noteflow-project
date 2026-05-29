@@ -1,13 +1,15 @@
-import { useState } from 'react';
-import { View, Text, TextInput, Image, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, Modal, Pressable, Platform, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, Image, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, Modal, Pressable, Platform, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useRouter } from 'expo-router';
+
 import { useThemeStore } from '../../store/themeStore';
 import { useNotesStore } from '../../store/notesStore';
 import { useLocaleStore } from '../../store/localeStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAccountStore } from '../../store/accountStore';
+import { useToastStore } from '../../store/toastStore';
 import { t } from '../../i18n';
 import { getColors, AppColors } from '../../constants/theme';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -31,7 +33,8 @@ function SettingsItem({ icon, title, subtitle, onPress, danger, right, colors }:
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+
+
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const sortBy = useThemeStore((s) => s.sortBy);
   const notifications = useThemeStore((s) => s.notifications);
@@ -54,6 +57,8 @@ export default function SettingsScreen() {
   const addAccount = useAccountStore((s) => s.addAccount);
   const removeAccount = useAccountStore((s) => s.removeAccount);
   const updateAccountProfile = useAccountStore((s) => s.updateAccountProfile);
+  const setAccountPassword = useAccountStore((s) => s.setAccountPassword);
+  const showToast = useToastStore((s) => s.showToast);
   const colors = getColors(isDarkMode);
 
   const [sortModalVisible, setSortModalVisible] = useState(false);
@@ -64,6 +69,22 @@ export default function SettingsScreen() {
   const [addPassword, setAddPassword] = useState('');
   const [addLoading, setAddLoading] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [passwordPromptVisible, setPasswordPromptVisible] = useState(false);
+  const [passwordPromptEmail, setPasswordPromptEmail] = useState('');
+  const [passwordPromptValue, setPasswordPromptValue] = useState('');
+  const [passwordPromptLoading, setPasswordPromptLoading] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (toastMsg) {
+      Animated.sequence([
+        Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.delay(2000),
+        Animated.timing(toastOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start(() => setToastMsg(''));
+    }
+  }, [toastMsg]);
 
   const handleAvatarPress = () => {
     Alert.alert(t(locale, 'settings.changePhoto'), '', [
@@ -129,6 +150,7 @@ export default function SettingsScreen() {
       'Esta cuenta no tiene contraseña guardada': 'settings.noPasswordSaved',
       'Account not found': 'settings.accountNotFound',
       'This account has no saved password': 'settings.noPasswordSaved',
+      'no_password': 'settings.passwordRequired',
     };
     return map[msg] ? t(locale, map[msg]) : msg;
   };
@@ -148,10 +170,10 @@ export default function SettingsScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-      <ScreenHeader title={t(locale, 'settings.title')} colors={colors} />
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      <ScreenHeader title={t(locale, 'settings.title')} colors={colors} icon="settings" />
 
-      <View style={[styles.section, { marginTop: 16 }]}>
+      <View style={[styles.section, { marginTop: 20 }]}>
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t(locale, 'settings.account')}</Text>
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <TouchableOpacity onPress={() => setAccountModalVisible(true)} activeOpacity={0.7} style={styles.avatarRow}>
@@ -178,7 +200,7 @@ export default function SettingsScreen() {
             </View>
           </TouchableOpacity>
           <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
-          <SettingsItem icon="log-out-outline" title={t(locale, 'settings.logout')} danger onPress={() => { Alert.alert(t(locale, 'settings.logoutTitle'), t(locale, 'settings.logoutMsg'), [{ text: t(locale, 'common.cancel'), style: 'cancel' }, { text: t(locale, 'settings.logoutConfirm'), style: 'destructive', onPress: () => { logout(); router.replace('/(auth)/login'); } }]); }} colors={colors} />
+          <SettingsItem icon="log-out-outline" title={t(locale, 'settings.logout')} danger onPress={() => { Alert.alert(t(locale, 'settings.logoutTitle'), t(locale, 'settings.logoutMsg'), [{ text: t(locale, 'common.cancel'), style: 'cancel' }, { text: t(locale, 'settings.logoutConfirm'), style: 'destructive', onPress: async () => { const others = accounts.filter(a => a.email !== activeEmail); if (others.length > 0 && activeEmail) { try { await removeAccount(activeEmail); setToastMsg(t(locale, 'settings.accountChanged', { email: others[0].email })); } catch {} } else { logout(); router.replace('/(auth)/login'); } } }]); }} colors={colors} />
         </View>
       </View>
 
@@ -219,10 +241,6 @@ export default function SettingsScreen() {
 
       <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.borderLight, marginHorizontal: 20 }]}>
         <SettingsItem icon="trash-outline" title={t(locale, 'settings.deleteAll')} danger onPress={handleDeleteAll} colors={colors} />
-      </View>
-
-      <View style={{ alignItems: 'center', paddingVertical: 24, paddingBottom: (Platform.OS === 'ios' ? 100 : 90) + insets.bottom }}>
-        <Text style={[styles.footerVersion, { color: colors.textTertiary }]}>{t(locale, 'settings.version')}</Text>
       </View>
 
       <Modal visible={accountModalVisible} transparent animationType="fade">
@@ -269,58 +287,71 @@ export default function SettingsScreen() {
                 {accounts.length === 0 ? (
                   <Text style={[{ color: colors.textSecondary, textAlign: 'center', marginVertical: 20 }]}>{t(locale, 'settings.noAccounts')}</Text>
                 ) : (
-                  accounts.map((acc) => {
-                    const isActive = acc.email === activeEmail;
-                    return (
-                      <TouchableOpacity
-                        key={acc.email}
-                        style={[styles.accountItem, { backgroundColor: isActive ? colors.primary + '12' : 'transparent', borderColor: isActive ? colors.primary + '30' : colors.border }]}
-                        onPress={async () => {
-                          if (isActive) return;
-                          setAccountModalVisible(false);
-                          setSwitching(true);
-                          try {
-                            await switchToAccount(acc.email);
-                            router.replace('/(tabs)/dashboard');
-                          } catch (e: any) {
-                            Alert.alert(t(locale, 'common.error'), translateError(e.message));
-                          } finally {
-                            setSwitching(false);
-                          }
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.accountAvatar, { backgroundColor: acc.avatarUrl ? 'transparent' : colors.primary + '20' }]}>
-                          {acc.avatarUrl ? (
-                            <Image source={{ uri: acc.avatarUrl }} style={styles.accountAvatarImg} />
-                          ) : (
-                            <Ionicons name="person" size={16} color={colors.primary} />
-                          )}
-                        </View>
-                        <View style={styles.accountInfo}>
-                          <Text style={[styles.accountName, { color: colors.text }]}>{acc.name || acc.email}</Text>
-                          <Text style={[styles.accountEmail, { color: colors.textTertiary }]}>{acc.email}</Text>
-                        </View>
-                        {isActive ? (
-                          <View style={[styles.accountActiveBadge, { backgroundColor: colors.primary }]}>
-                            <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                          </View>
-                        ) : null}
+                    accounts.map((acc) => {
+                      const isActive = acc.email === activeEmail;
+                      const hasPassword = !!acc.password;
+                      return (
                         <TouchableOpacity
+                          key={acc.email}
+                          style={[styles.accountItem, { backgroundColor: isActive ? colors.primary + '12' : 'transparent', borderColor: isActive ? colors.primary + '30' : colors.border }]}
                           onPress={() => {
-                            Alert.alert(t(locale, 'settings.removeAccount'), t(locale, 'settings.removeAccountConfirm', { email: acc.email }), [
-                              { text: t(locale, 'common.cancel'), style: 'cancel' },
-                              { text: t(locale, 'settings.remove'), style: 'destructive', onPress: () => removeAccount(acc.email) },
-                            ]);
+                            if (isActive) return;
+                            if (!hasPassword) {
+                              setPasswordPromptEmail(acc.email);
+                              setPasswordPromptValue('');
+                              setPasswordPromptVisible(true);
+                              return;
+                            }
+                            setAccountModalVisible(false);
+                            setSwitching(true);
+                            (async () => {
+                              try {
+                                await switchToAccount(acc.email);
+                                router.replace('/(tabs)/dashboard');
+                                setTimeout(() => showToast(t(locale, 'settings.accountChanged', { email: acc.email })), 400);
+                              } catch (e: any) {
+                                Alert.alert(t(locale, 'common.error'), translateError(e.message));
+                              } finally {
+                                setSwitching(false);
+                              }
+                            })();
                           }}
-                          style={styles.accountRemoveBtn}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          activeOpacity={0.7}
                         >
-                          <Ionicons name="close-outline" size={18} color={colors.textTertiary} />
+                          <View style={[styles.accountAvatar, { backgroundColor: acc.avatarUrl ? 'transparent' : colors.primary + '20' }]}>
+                            {acc.avatarUrl ? (
+                              <Image source={{ uri: acc.avatarUrl }} style={styles.accountAvatarImg} />
+                            ) : (
+                              <Ionicons name="person" size={16} color={colors.primary} />
+                            )}
+                          </View>
+                          <View style={styles.accountInfo}>
+                            <Text style={[styles.accountName, { color: colors.text }]}>{acc.name || acc.email}</Text>
+                            <Text style={[styles.accountEmail, { color: colors.textTertiary }]}>{acc.email}</Text>
+                          </View>
+                          {!hasPassword ? (
+                            <Ionicons name="lock-closed-outline" size={14} color={colors.textTertiary} style={{ marginRight: 6 }} />
+                          ) : null}
+                          {isActive ? (
+                            <View style={[styles.accountActiveBadge, { backgroundColor: colors.primary }]}>
+                              <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                            </View>
+                          ) : null}
+                          <TouchableOpacity
+                            onPress={() => {
+                              Alert.alert(t(locale, 'settings.removeAccount'), t(locale, 'settings.removeAccountConfirm', { email: acc.email }), [
+                                { text: t(locale, 'common.cancel'), style: 'cancel' },
+                                { text: t(locale, 'settings.remove'), style: 'destructive', onPress: () => removeAccount(acc.email) },
+                              ]);
+                            }}
+                            style={styles.accountRemoveBtn}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="close-outline" size={18} color={colors.textTertiary} />
+                          </TouchableOpacity>
                         </TouchableOpacity>
-                      </TouchableOpacity>
-                    );
-                  })
+                      );
+                    })
                 )}
                 {accounts.length < 5 && (
                   <TouchableOpacity
@@ -334,6 +365,56 @@ export default function SettingsScreen() {
                 )}
               </>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={passwordPromptVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => { if (!passwordPromptLoading) setPasswordPromptVisible(false); }}>
+          <Pressable style={[styles.modalContent, { backgroundColor: colors.surface }]} onPress={() => {}}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{t(locale, 'settings.passwordRequired')}</Text>
+            <Text style={[{ color: colors.textSecondary, fontSize: 14, marginBottom: 16, textAlign: 'center' }]}>
+              {t(locale, 'settings.enterPassword', { email: passwordPromptEmail })}
+            </Text>
+            <TextInput autoCapitalize="none" autoCorrect={false}
+              style={[styles.addInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+              placeholder={t(locale, 'common.password')}
+              placeholderTextColor={colors.textTertiary}
+              value={passwordPromptValue}
+              onChangeText={setPasswordPromptValue}
+              secureTextEntry
+            />
+            <TouchableOpacity
+              style={[styles.addAccountConfirmBtn, { backgroundColor: colors.primary, opacity: passwordPromptLoading ? 0.7 : 1 }]}
+              onPress={async () => {
+                if (!passwordPromptValue.trim()) return;
+                setPasswordPromptLoading(true);
+                try {
+                  await setAccountPassword(passwordPromptEmail, passwordPromptValue.trim());
+                  setPasswordPromptVisible(false);
+                  setAccountModalVisible(false);
+                  setSwitching(true);
+                  await switchToAccount(passwordPromptEmail);
+                  router.replace('/(tabs)/dashboard');
+                  setTimeout(() => showToast(t(locale, 'settings.accountChanged', { email: passwordPromptEmail })), 400);
+                } catch (e: any) {
+                  Alert.alert(t(locale, 'common.error'), translateError(e.message));
+                } finally {
+                  setPasswordPromptLoading(false);
+                }
+              }}
+              disabled={passwordPromptLoading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.addAccountConfirmText}>{passwordPromptLoading ? t(locale, 'common.loading') : t(locale, 'settings.passwordConfirm')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.addAccountBackBtn, { borderColor: colors.border }]}
+              onPress={() => { setPasswordPromptVisible(false); setPasswordPromptValue(''); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[{ color: colors.textSecondary, fontSize: 14 }]}>{t(locale, 'common.cancel')}</Text>
+            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
@@ -378,6 +459,11 @@ export default function SettingsScreen() {
         </Pressable>
       </Modal>
       </ScrollView>
+      {toastMsg !== '' && (
+        <Animated.View style={[styles.toast, { opacity: toastOpacity, backgroundColor: colors.primary }]}>
+          <Text style={styles.toastText}>{toastMsg}</Text>
+        </Animated.View>
+      )}
       {switching && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }]}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -389,7 +475,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  footerVersion: { fontSize: 12, fontWeight: '500', opacity: 0.5 },
+
   section: { marginBottom: 24, paddingHorizontal: 20 },
   sectionLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 8, marginLeft: 4 },
   sectionCard: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
@@ -400,7 +486,7 @@ const styles = StyleSheet.create({
   chevron: { fontSize: 22 },
   countValue: { fontSize: 15, fontWeight: '600' },
   divider: { height: 1, marginLeft: 16 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 32 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center', padding: 32 },
   modalContent: { borderRadius: 16, padding: 24, width: '100%', maxWidth: 320 },
   modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 20 },
   modalOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
@@ -440,4 +526,11 @@ const styles = StyleSheet.create({
   addAccountConfirmBtn: { width: '100%', height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   addAccountConfirmText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
   addAccountBackBtn: { width: '100%', height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  toast: {
+    position: 'absolute', bottom: Platform.OS === 'ios' ? 120 : 100, left: 20, right: 20,
+    paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12,
+    alignItems: 'center', zIndex: 999,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6,
+  },
+  toastText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });

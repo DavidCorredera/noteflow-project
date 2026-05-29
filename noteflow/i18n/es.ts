@@ -21,6 +21,7 @@ export const es = {
   'common.password': 'Contraseña',
   'common.name': 'Nombre',
   'common.fillFields': 'Completa todos los campos',
+  'common.search': 'Buscar',
 
   'auth.loginSubtitle': 'Inicia sesión para continuar',
   'auth.loginButton': 'Entrar',
@@ -69,7 +70,8 @@ export const es = {
   'idea.tagsPlaceholder': 'etiqueta1, etiqueta2, etiqueta3',
   'idea.noIdeas': 'Sin ideas',
   'idea.noIdeasDesc': 'Captura tus ideas rápidas aquí',
-  'idea.noArchived': 'Sin archivadas',
+  'idea.archived': 'Archivadas',
+  'idea.noArchived': 'Sin ideas archivadas',
 
   'settings.title': 'Ajustes',
   'settings.preferences': 'PREFERENCIAS',
@@ -121,6 +123,14 @@ export const es = {
   'settings.accountNotFound': 'Cuenta no encontrada',
   'settings.noPasswordSaved': 'Esta cuenta no tiene contraseña guardada',
   'settings.remove': 'Eliminar',
+  'settings.enterPassword': 'Ingresa la contraseña para {email}',
+  'settings.passwordRequired': 'Contraseña requerida',
+  'settings.passwordConfirm': 'Confirmar',
+
+  'settings.accountChanged': 'Cuenta cambiada a {email}',
+
+  'folderPicker.title': 'Mover a carpeta',
+  'folderPicker.noFolder': 'Sin carpeta',
 
   'nuevaNota.title': 'Nueva Entrada',
   'nuevaNota.note': 'Nota',
@@ -156,15 +166,18 @@ export const es = {
 
   'notas.empty': 'Sin notas',
   'notas.emptyDesc': 'Tu primera nota te espera',
-  'notas.noArchived': 'Sin archivadas',
+  'notas.archived': 'Archivadas',
+  'notas.noArchived': 'Sin notas archivadas',
 
   'checklistsList.empty': 'Sin tareas',
   'checklistsList.emptyDesc': 'Crea tu primera tarea',
-  'checklistsList.noArchived': 'Sin archivadas',
+  'checklistsList.archived': 'Archivadas',
+  'checklistsList.noArchived': 'Sin tareas archivadas',
 
   'ideasList.empty': 'Sin ideas',
   'ideasList.emptyDesc': 'Captura tus ideas rápidas aquí',
-  'ideasList.noArchived': 'Sin archivadas',
+  'ideasList.archived': 'Archivadas',
+  'ideasList.noArchived': 'Sin ideas archivadas',
 
   'swipe.delete': 'Eliminar',
   'swipe.archive': 'Archivar',

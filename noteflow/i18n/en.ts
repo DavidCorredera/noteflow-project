@@ -21,6 +21,7 @@ export const en = {
   'common.password': 'Password',
   'common.name': 'Name',
   'common.fillFields': 'Fill all fields',
+  'common.search': 'Search',
 
   'auth.loginSubtitle': 'Sign in to continue',
   'auth.loginButton': 'Sign in',
@@ -69,7 +70,8 @@ export const en = {
   'idea.tagsPlaceholder': 'tag1, tag2, tag3',
   'idea.noIdeas': 'No ideas',
   'idea.noIdeasDesc': 'Capture your quick ideas here',
-  'idea.noArchived': 'No archived',
+  'idea.archived': 'Archived',
+  'idea.noArchived': 'No archived ideas',
 
   'settings.title': 'Settings',
   'settings.preferences': 'PREFERENCES',
@@ -121,6 +123,14 @@ export const en = {
   'settings.accountNotFound': 'Account not found',
   'settings.noPasswordSaved': 'This account has no saved password',
   'settings.remove': 'Remove',
+  'settings.enterPassword': 'Enter password for {email}',
+  'settings.passwordRequired': 'Password required',
+  'settings.passwordConfirm': 'Confirm',
+
+  'settings.accountChanged': 'Account changed to {email}',
+
+  'folderPicker.title': 'Move to folder',
+  'folderPicker.noFolder': 'No folder',
 
   'nuevaNota.title': 'New Entry',
   'nuevaNota.note': 'Note',
@@ -156,15 +166,18 @@ export const en = {
 
   'notas.empty': 'No notes',
   'notas.emptyDesc': 'Your first note awaits',
-  'notas.noArchived': 'No archived',
+  'notas.archived': 'Archived',
+  'notas.noArchived': 'No archived notes',
 
   'checklistsList.empty': 'No tasks',
   'checklistsList.emptyDesc': 'Create your first task',
-  'checklistsList.noArchived': 'No archived',
+  'checklistsList.archived': 'Archived',
+  'checklistsList.noArchived': 'No archived tasks',
 
   'ideasList.empty': 'No ideas',
   'ideasList.emptyDesc': 'Capture your quick ideas here',
-  'ideasList.noArchived': 'No archived',
+  'ideasList.archived': 'Archived',
+  'ideasList.noArchived': 'No archived ideas',
 
   'swipe.delete': 'Delete',
   'swipe.archive': 'Archive',

@@ -1,10 +1,18 @@
 import { create } from 'zustand';
 import { auth, firestore } from '../lib/firebase';
 import { useNotesStore } from './notesStore';
+import { useFolderStore } from './folderStore';
 
 interface SavedAccount {
   email: string;
   password: string;
+  uid: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+interface LinkedAccountInfo {
+  email: string;
   uid: string;
   name: string;
   avatarUrl: string | null;
@@ -20,6 +28,7 @@ interface AccountState {
   switchToAccount: (email: string) => Promise<void>;
   removeAccount: (email: string) => Promise<void>;
   updateAccountProfile: (email: string, data: Partial<Pick<SavedAccount, 'name' | 'avatarUrl'>>) => Promise<void>;
+  setAccountPassword: (email: string, password: string) => Promise<void>;
 }
 
 let SecureStore: any;
@@ -52,6 +61,42 @@ async function loadFromStorage(): Promise<string | null> {
   return null;
 }
 
+async function fetchLinkedAccountsFromFirestore(uid: string): Promise<LinkedAccountInfo[]> {
+  try {
+    const doc = await firestore.collection('users').doc(uid).get();
+    const data = doc.data();
+    if (data?.linkedAccounts && Array.isArray(data.linkedAccounts)) {
+      return data.linkedAccounts;
+    }
+  } catch {}
+  return [];
+}
+
+async function saveLinkedAccountToFirestore(adderUid: string, info: LinkedAccountInfo) {
+  try {
+    const docRef = firestore.collection('users').doc(adderUid);
+    const snap = await docRef.get();
+    const data = snap.data() || {};
+    const linkedAccounts: LinkedAccountInfo[] = (data.linkedAccounts || []) as LinkedAccountInfo[];
+    if (!linkedAccounts.find((la: LinkedAccountInfo) => la.email === info.email)) {
+      linkedAccounts.push(info);
+    }
+    await docRef.set({ ...data, linkedAccounts });
+  } catch {}
+}
+
+async function removeLinkedAccountFromFirestore(adderUid: string, email: string) {
+  try {
+    const docRef = firestore.collection('users').doc(adderUid);
+    const snap = await docRef.get();
+    const data = snap.data() || {};
+    const linkedAccounts: LinkedAccountInfo[] = ((data.linkedAccounts || []) as LinkedAccountInfo[]).filter(
+      (la: LinkedAccountInfo) => la.email !== email
+    );
+    await docRef.set({ ...data, linkedAccounts });
+  } catch {}
+}
+
 export const useAccountStore = create<AccountState>((set, get) => ({
   accounts: [],
   activeEmail: null,
@@ -62,17 +107,36 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     if (state.loaded) return;
     try {
       const raw = await loadFromStorage();
+      let accounts: SavedAccount[] = [];
+      let activeEmail = auth.currentUser?.email ?? null;
+
       if (raw) {
-        const accounts: SavedAccount[] = JSON.parse(raw);
-        const currentUser = auth.currentUser;
-        set({
-          accounts,
-          activeEmail: currentUser?.email ?? null,
-          loaded: true,
-        });
-      } else {
-        set({ loaded: true });
+        accounts = JSON.parse(raw);
       }
+
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const linked = await fetchLinkedAccountsFromFirestore(currentUser.uid);
+        const existingEmails = new Set(accounts.map((a) => a.email));
+        for (const la of linked) {
+          if (!existingEmails.has(la.email)) {
+            accounts.push({
+              email: la.email,
+              password: '',
+              uid: la.uid,
+              name: la.name || '',
+              avatarUrl: la.avatarUrl || null,
+            });
+            existingEmails.add(la.email);
+          }
+        }
+      }
+
+      set({
+        accounts,
+        activeEmail,
+        loaded: true,
+      });
     } catch {
       set({ loaded: true });
     }
@@ -85,6 +149,12 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     }
     if (state.accounts.find((a) => a.email === email)) {
       throw new Error('Esta cuenta ya está añadida');
+    }
+
+    const adderEmail = state.activeEmail;
+    const adderAccount = state.accounts.find((a) => a.email === adderEmail);
+    if (!adderAccount) {
+      throw new Error('No active account found');
     }
 
     let currentUser;
@@ -121,6 +191,16 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       name: profile?.name || '',
       avatarUrl: profile?.avatarUrl || null,
     };
+
+    await auth.signInWithEmailAndPassword(adderAccount.email, adderAccount.password);
+    await saveLinkedAccountToFirestore(adderAccount.uid, {
+      email: newAccount.email,
+      uid: newAccount.uid,
+      name: newAccount.name,
+      avatarUrl: newAccount.avatarUrl,
+    });
+
+    await auth.signInWithEmailAndPassword(email, password);
 
     const updated = [...state.accounts, newAccount];
     await saveToStorage(updated);
@@ -164,12 +244,18 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     if (!account) throw new Error('Cuenta no encontrada');
 
     if (!account.password) {
-      throw new Error('Esta cuenta no tiene contraseña guardada');
+      throw new Error('no_password');
     }
 
     await auth.signInWithEmailAndPassword(account.email, account.password);
     useNotesStore.getState().resetNotes();
-    await useNotesStore.getState().fetchNotes();
+    useFolderStore.getState().resetFolders();
+    await Promise.all([
+      useNotesStore.getState().fetchNotes(),
+      useFolderStore.getState().fetchFolders('note'),
+      useFolderStore.getState().fetchFolders('checklist'),
+      useFolderStore.getState().fetchFolders('idea'),
+    ]);
     set({ activeEmail: email });
   },
 
@@ -179,7 +265,11 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     await saveToStorage(updated);
     set({ accounts: updated });
 
-    // If removing active account, switch to another or sign out
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      await removeLinkedAccountFromFirestore(currentUser.uid, email);
+    }
+
     if (state.activeEmail === email) {
       if (updated.length > 0) {
         await get().switchToAccount(updated[0].email);
@@ -194,6 +284,15 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     const state = get();
     const updated = state.accounts.map((a) =>
       a.email === email ? { ...a, ...data } : a
+    );
+    await saveToStorage(updated);
+    set({ accounts: updated });
+  },
+
+  setAccountPassword: async (email, password) => {
+    const state = get();
+    const updated = state.accounts.map((a) =>
+      a.email === email ? { ...a, password } : a
     );
     await saveToStorage(updated);
     set({ accounts: updated });

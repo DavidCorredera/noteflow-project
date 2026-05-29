@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useNotesStore } from '../store/notesStore';
+import { useFolderStore } from '../store/folderStore';
 import { useThemeStore } from '../store/themeStore';
 import { getColors } from '../constants/theme';
 import { ItemPriority } from '../types';
@@ -69,6 +70,14 @@ export default function NuevaNotaScreen() {
   const [reminderDate, setReminderDate] = useState<Date | null>(null);
   const [locationData, setLocationData] = useState<{ latitude: number; longitude: number; name: string | null } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const allFolders = useFolderStore((s) => s.foldersByType);
+  const fetchFolders = useFolderStore((s) => s.fetchFolders);
+  const folders = allFolders[type as 'note' | 'checklist' | 'idea'];
+
+  useEffect(() => {
+    fetchFolders(type as 'note' | 'checklist' | 'idea');
+  }, [type]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -109,15 +118,16 @@ export default function NuevaNotaScreen() {
             sketches: noteSketches,
             images: noteImages,
           }),
+          folderId: folderId ?? undefined,
           reminderDate: reminderDateStr,
           latitude: locationData?.latitude,
           longitude: locationData?.longitude,
         });
       } else if (type === 'checklist') {
         const items = checklistItems.filter((item) => item.text.trim());
-        await addChecklist({ title: title.trim(), items, reminderDate: reminderDateStr, latitude: locationData?.latitude, longitude: locationData?.longitude });
+        await addChecklist({ title: title.trim(), items, folderId: folderId ?? undefined, reminderDate: reminderDateStr, latitude: locationData?.latitude, longitude: locationData?.longitude });
       } else if (type === 'idea') {
-        await addIdea({ title: title.trim(), tags, content: ideaBody.trim() || undefined, color: ideaColor, pinned, reminderDate: reminderDateStr, latitude: locationData?.latitude, longitude: locationData?.longitude });
+        await addIdea({ title: title.trim(), tags, content: ideaBody.trim() || undefined, color: ideaColor, pinned, folderId: folderId ?? undefined, reminderDate: reminderDateStr, latitude: locationData?.latitude, longitude: locationData?.longitude });
       }
 
       if (reminderDate) {
@@ -352,16 +362,16 @@ export default function NuevaNotaScreen() {
               );
             })}
             {reminderDate && (
-              <TouchableOpacity onPress={() => setReminderDate(null)} style={styles.reminderClear} activeOpacity={0.7}>
-                <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
-              </TouchableOpacity>
+              <>
+                <Text style={[styles.reminderDateText, { color: colors.primary }]}>
+                  {t(locale, 'nuevaNota.reminderSet')}: {reminderDate.toLocaleDateString(locale === 'es' ? 'es-ES' : 'en-US', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                <TouchableOpacity onPress={() => setReminderDate(null)} style={styles.reminderClear} activeOpacity={0.7}>
+                  <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                </TouchableOpacity>
+              </>
             )}
           </View>
-          {reminderDate && (
-            <Text style={[styles.reminderDateText, { color: colors.primary }]}>
-              {t(locale, 'nuevaNota.reminderSet')}: {reminderDate.toLocaleDateString(locale === 'es' ? 'es-ES' : 'en-US', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          )}
         </View>
 
         {/* Location section */}
@@ -384,6 +394,32 @@ export default function NuevaNotaScreen() {
             </Text>
             {locationData && <Ionicons name="close-circle" size={18} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />}
           </TouchableOpacity>
+        </View>
+
+        {/* Folder */}
+        <View style={[styles.section, { marginTop: 16 }]}>
+          <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Carpeta</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TouchableOpacity
+              onPress={() => setFolderId(null)}
+              style={[styles.folderChip, { borderColor: colors.border, backgroundColor: !folderId ? colors.primary + '15' : colors.surface }]}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="folder-open-outline" size={16} color={!folderId ? colors.primary : colors.textTertiary} />
+              <Text style={[styles.folderChipText, { color: !folderId ? colors.primary : colors.textTertiary }]}>Sin carpeta</Text>
+            </TouchableOpacity>
+            {folders.map((f) => (
+              <TouchableOpacity
+                key={f.id}
+                onPress={() => setFolderId(f.id)}
+                style={[styles.folderChip, { borderColor: f.color + '40', backgroundColor: folderId === f.id ? f.color + '20' : colors.surface }]}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="folder-outline" size={16} color={f.color} />
+                <Text style={[styles.folderChipText, { color: folderId === f.id ? f.color : colors.textSecondary }]}>{f.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
     </ScrollView>
   );
@@ -450,10 +486,15 @@ const styles = StyleSheet.create({
   reminderChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   reminderChipText: { fontSize: 13, fontWeight: '600' },
   reminderClear: { padding: 4 },
-  reminderDateText: { fontSize: 12, fontWeight: '500', marginTop: 8 },
+  reminderDateText: { fontSize: 12, fontWeight: '500' },
   locationBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
   },
   locationBtnText: { fontSize: 14, fontWeight: '500' },
+  folderChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8,
+  },
+  folderChipText: { fontSize: 13, fontWeight: '600' },
 });

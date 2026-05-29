@@ -4,6 +4,7 @@ export interface BaseNote {
   createdAt: Date;
   updatedAt: Date;
   archived?: boolean;
+  folderId?: string;
   reminderDate?: string;
   latitude?: number;
   longitude?: number;
@@ -35,3 +36,12 @@ export interface IdeaNote extends BaseNote {
 }
 
 export type AnyNote = Note | ChecklistNote | IdeaNote;
+
+export interface Folder {
+  id: string;
+  name: string;
+  color: string;
+  type: 'note' | 'checklist' | 'idea';
+  createdAt: Date;
+  updatedAt: Date;
+}

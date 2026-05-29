@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { GluestackUIProvider } from '@gluestack-ui/themed';
 import { config } from '../gluestack-ui.config';
 import { useThemeStore } from '../store/themeStore';
@@ -9,10 +9,11 @@ import { useAuthStore } from '../store/authStore';
 import { useAccountStore } from '../store/accountStore';
 import { getColors } from '../constants/theme';
 import { t } from '../i18n';
-import { Platform, View, ActivityIndicator, Animated, StyleSheet } from 'react-native';
+import { Platform, View, ActivityIndicator, Animated, Text, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { auth } from '../lib/firebase';
+import { useToastStore } from '../store/toastStore';
 import '../lib/notifications';
 
 function useScreenOptions() {
@@ -31,6 +32,16 @@ function useScreenOptions() {
   };
 }
 
+const toastStyles = StyleSheet.create({
+  toast: {
+    position: 'absolute', bottom: Platform.OS === 'ios' ? 100 : 100, left: 20, right: 20,
+    paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12,
+    alignItems: 'center', zIndex: 9999,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6,
+  },
+  toastText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600', textAlign: 'center' },
+});
+
 const detailScreenOptions = Platform.select({
   ios: {
     headerBackButtonDisplayMode: 'minimal' as const,
@@ -43,11 +54,28 @@ export default function RootLayout() {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const load = useThemeStore((s) => s.load);
   const loaded = useThemeStore((s) => s.loaded);
+  const toastMsg = useToastStore((s) => s.message);
+  const clearToast = useToastStore((s) => s.clearToast);
+  const [visibleToast, setVisibleToast] = useState('');
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (toastMsg) {
+      setVisibleToast(toastMsg);
+      clearToast();
+      Animated.sequence([
+        Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.delay(2000),
+        Animated.timing(toastOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start(() => setVisibleToast(''));
+    }
+  }, [toastMsg]);
   const loadLocale = useLocaleStore((s) => s.load);
   const localeLoaded = useLocaleStore((s) => s.loaded);
   const locale = useLocaleStore((s) => s.locale);
   const screenOptions = useScreenOptions();
   const colors = getColors(isDarkMode);
+  const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const authInitialized = useAuthStore((s) => s.initialized);
   const setInitialized = useAuthStore((s) => s.setInitialized);
@@ -58,27 +86,6 @@ export default function RootLayout() {
 
   const fetchNotes = useNotesStore((s) => s.fetchNotes);
 
-  const prevDark = useRef(isDarkMode);
-  const [showFade, setShowFade] = useState(false);
-  const [overlayColor, setOverlayColor] = useState(colors.background);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (prevDark.current !== isDarkMode) {
-      const oldColors = getColors(prevDark.current);
-      setOverlayColor(oldColors.background);
-      prevDark.current = isDarkMode;
-      
-      setShowFade(true);
-      fadeAnim.setValue(1);
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => setShowFade(false));
-    }
-  }, [isDarkMode]);
-
   useEffect(() => { load(); loadLocale(); }, []);
 
   useEffect(() => {
@@ -86,10 +93,10 @@ export default function RootLayout() {
   }, [loaded, localeLoaded]);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      setUser(user);
-      if (user) {
-        await loadProfile(user.uid);
+    const unsubscribe = auth.onAuthStateChanged(async (fbUser) => {
+      setUser(fbUser);
+      if (fbUser) {
+        await loadProfile(fbUser.uid);
       }
       setLoading(false);
       if (!accountsLoadedRef.current) {
@@ -100,6 +107,21 @@ export default function RootLayout() {
     });
     return unsubscribe;
   }, []);
+
+  const signedOutRedirected = useRef(false);
+
+  useEffect(() => {
+    if (!user && authInitialized && !signedOutRedirected.current) {
+      signedOutRedirected.current = true;
+      const id = setTimeout(() => {
+        router.replace('/(auth)/login');
+      }, 0);
+      return () => clearTimeout(id);
+    }
+    if (user) {
+      signedOutRedirected.current = false;
+    }
+  }, [user, authInitialized]);
 
   if (!loaded || !localeLoaded || !authInitialized) return null;
 
@@ -129,11 +151,10 @@ export default function RootLayout() {
           <Stack.Screen name="feedback" options={{ title: t(locale, 'feedback.title'), headerTransparent: false, headerStyle: { backgroundColor: colors.background }, ...detailScreenOptions }} />
         </Stack>
       </GluestackUIProvider>
-      {showFade && (
-        <Animated.View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor, opacity: fadeAnim, zIndex: 9999 }]}
-        />
+      {visibleToast !== '' && (
+        <Animated.View style={[toastStyles.toast, { opacity: toastOpacity, backgroundColor: colors.primary }]}>
+          <Text style={toastStyles.toastText}>{visibleToast}</Text>
+        </Animated.View>
       )}
     </GestureHandlerRootView>
   );

@@ -11,6 +11,7 @@ import { getColors } from '../../constants/theme';
 import { getNotePlainTextPreview } from '../../lib/noteContent';
 import ScreenHeader from '../../components/ScreenHeader';
 
+
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 function StatCard({ icon, title, value, accent, onPress, colors: c }: any) {
@@ -101,7 +102,7 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 100 : 120 }}>
-      <ScreenHeader title={t(locale, 'dashboard.title')} colors={colors} />
+      <ScreenHeader title={t(locale, 'dashboard.title')} colors={colors} icon="home" />
 
       <View style={styles.quickRow}>
         <QuickAction icon="document-text-outline" label={t(locale, 'dashboard.newNote')} onPress={() => router.push('/nueva-nota?type=note' as any)} colors={colors} />

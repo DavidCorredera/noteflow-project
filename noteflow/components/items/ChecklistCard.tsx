@@ -11,9 +11,10 @@ interface Props {
   onPress: () => void;
   colors: AppColors;
   mode?: 'full';
+  folderColor?: string;
 }
 
-export default function ChecklistCard({ note, onPress, colors, mode }: Props) {
+export default function ChecklistCard({ note, onPress, colors, mode, folderColor }: Props) {
   const locale = useLocaleStore((s) => s.locale);
   const totalItems = note.items.length;
   const completedItems = note.items.filter(i => i.isCompleted).length;
@@ -24,7 +25,8 @@ export default function ChecklistCard({ note, onPress, colors, mode }: Props) {
   const isFull = mode === 'full';
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={isFull ? undefined : styles.touchable}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={isFull ? styles.touchableFull : styles.touchable}>
+      {folderColor && <View style={[styles.folderStripe, { backgroundColor: folderColor }]} />}
       <Card intensity={60} tint="light" style={[isFull ? styles.cardFull : styles.cardGrid, { borderColor: colors.borderLight, shadowColor: colors.cardShadow, backgroundColor: colors.surface }]}>
         <View style={isFull ? styles.headerFull : undefined}>
           <Text style={[isFull ? styles.titleFull : styles.titleGrid, { color: colors.text }]} numberOfLines={isFull ? 1 : 2}>{note.title}</Text>
@@ -54,13 +56,15 @@ export default function ChecklistCard({ note, onPress, colors, mode }: Props) {
 }
 
 const styles = StyleSheet.create({
-  touchable: { flex: 1 },
+  touchable: { flex: 1, position: 'relative' },
+  touchableFull: { position: 'relative' },
+  folderStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, borderTopLeftRadius: 14, borderTopRightRadius: 14, zIndex: 1 },
   cardGrid: {
-    borderRadius: 14, padding: 14, aspectRatio: 1, borderWidth: 1,
+    borderRadius: 14, padding: 14, aspectRatio: 1, borderWidth: 1, overflow: 'hidden',
     shadowOffset: { width: 4, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4,
   },
   cardFull: {
-    borderRadius: 16, padding: 16, borderWidth: 1,
+    borderRadius: 16, padding: 16, borderWidth: 1, overflow: 'hidden',
     shadowOffset: { width: 4, height: 2 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 3,
   },
   headerFull: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

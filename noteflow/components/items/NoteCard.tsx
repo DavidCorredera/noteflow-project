@@ -9,14 +9,16 @@ interface Props {
   note: Note;
   onPress: () => void;
   colors: AppColors;
+  folderColor?: string;
 }
 
-export default function NoteCard({ note, onPress, colors }: Props) {
+export default function NoteCard({ note, onPress, colors, folderColor }: Props) {
   const preview = getNotePlainTextPreview(note.content);
   const sketchCount = parseNoteContent(note.content).sketches.length;
   const Card = Platform.OS === 'ios' ? BlurView : View;
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.touchable}>
+      {folderColor && <View style={[styles.folderStripe, { backgroundColor: folderColor }]} />}
       <Card intensity={60} tint="light" style={[styles.card, { borderColor: colors.borderLight, shadowColor: colors.cardShadow, backgroundColor: colors.surface }]}>
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>{note.title}</Text>
         <Text style={[styles.preview, { color: colors.textTertiary }]} numberOfLines={3}>{preview || 'Sin contenido'}</Text>
@@ -29,7 +31,8 @@ export default function NoteCard({ note, onPress, colors }: Props) {
 }
 
 const styles = StyleSheet.create({
-  touchable: { flex: 1 },
+  touchable: { flex: 1, position: 'relative' },
+  folderStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, borderTopLeftRadius: 14, borderTopRightRadius: 14, zIndex: 1 },
   card: {
     borderRadius: 14, padding: 14, aspectRatio: 1, borderWidth: 1,
     shadowOffset: { width: 4, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4,

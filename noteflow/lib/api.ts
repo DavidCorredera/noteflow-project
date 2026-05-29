@@ -16,6 +16,7 @@ export type CreateNoteInput = {
   content?: string;
   color?: string;
   tags?: string[];
+  folderId?: string;
   reminderDate?: string;
   latitude?: number;
   longitude?: number;
@@ -85,7 +86,7 @@ export async function deleteChecklistItemApi(itemId: string): Promise<void> {
   if (!res.ok) throw new Error('Error al borrar ítem');
 }
 
-export async function updateNoteApi(id: string, data: Partial<{ title: string; content: string; tags: string[]; color: string; archived: boolean; reminderDate: string; latitude: number; longitude: number }>) {
+export async function updateNoteApi(id: string, data: Partial<{ title: string; content: string; tags: string[]; color: string; archived: boolean; folderId: string | null; reminderDate: string; latitude: number; longitude: number }>) {
   const res = await fetch(`${BASE_URL}/notes/${id}`, {
     method: 'PATCH',
     headers: await authHeaders(),
@@ -93,4 +94,38 @@ export async function updateNoteApi(id: string, data: Partial<{ title: string; c
   });
   if (!res.ok) throw new Error('Error al actualizar nota');
   return res.json();
+}
+
+export async function getFoldersApi(type: 'note' | 'checklist' | 'idea') {
+  const res = await fetch(`${BASE_URL}/folders?type=${type}`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar carpetas');
+  return res.json();
+}
+
+export async function createFolderApi(data: { name: string; color: string; type: 'note' | 'checklist' | 'idea' }) {
+  const res = await fetch(`${BASE_URL}/folders`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Error al crear carpeta');
+  return res.json();
+}
+
+export async function updateFolderApi(id: string, data: { name?: string; color?: string }) {
+  const res = await fetch(`${BASE_URL}/folders/${id}`, {
+    method: 'PATCH',
+    headers: await authHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Error al actualizar carpeta');
+  return res.json();
+}
+
+export async function deleteFolderApi(id: string) {
+  const res = await fetch(`${BASE_URL}/folders/${id}`, {
+    method: 'DELETE',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error('Error al eliminar carpeta');
 }

@@ -9,7 +9,10 @@ import { useThemeStore } from '../../store/themeStore';
 import { getColors } from '../../constants/theme';
 import { ItemPriority } from '../../types';
 import { useLocaleStore } from '../../store/localeStore';
+import { useFolderStore } from '../../store/folderStore';
 import { t } from '../../i18n';
+import { scheduleReminder, cancelReminder } from '../../lib/notifications';
+import { getCurrentLocation } from '../../lib/location';
 
 const PRIORITY_CYCLES: ItemPriority[] = ['none', 'low', 'medium', 'high'];
 const PRIORITY_ICONS: Record<ItemPriority, keyof typeof Ionicons.glyphMap> = {
@@ -54,15 +57,28 @@ export default function ChecklistDetailScreen() {
   const [filter, setFilter] = useState<'all' | 'active' | 'done'>('all');
   const editInputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList>(null);
+  const [reminderDate, setReminderDate] = useState<Date | null>(null);
+  const [locationData, setLocationData] = useState<{ latitude: number; longitude: number; name: string | null } | null>(null);
+  const [locating, setLocating] = useState(false);
   const hasTitleChanges = useRef(false);
   const loadedIdRef = useRef<string | null>(null);
+  const notificationIdRef = useRef<string | null>(null);
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const folders = useFolderStore((s) => s.foldersByType.checklist);
+  const fetchFolders = useFolderStore((s) => s.fetchFolders);
   const titleRef = useRef(title);
+  const folderIdRef = useRef(folderId);
+  const reminderDateRef = useRef<Date | null>(null);
+  const locationDataRef = useRef(locationData);
 
   useLayoutEffect(() => {
     if (checklist) {
       if (checklist.id !== loadedIdRef.current) {
         loadedIdRef.current = checklist.id;
         setTitle(checklist.title);
+        setReminderDate(checklist.reminderDate ? new Date(checklist.reminderDate) : null);
+        setLocationData(checklist.latitude ? { latitude: checklist.latitude, longitude: checklist.longitude ?? 0, name: null } : null);
+        setFolderId(checklist.folderId ?? null);
         hasTitleChanges.current = false;
       }
       navigation.setOptions({
@@ -79,12 +95,27 @@ export default function ChecklistDetailScreen() {
     }
   }, [checklist?.id, navigation, colors]);
 
-  useEffect(() => { titleRef.current = title; }, [title]);
+  useEffect(() => {
+    titleRef.current = title;
+    reminderDateRef.current = reminderDate;
+    locationDataRef.current = locationData;
+    folderIdRef.current = folderId;
+  }, [title, reminderDate, locationData, folderId]);
+
+  useEffect(() => {
+    fetchFolders('checklist');
+  }, []);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', () => {
-      if (hasTitleChanges.current && checklist) {
-        updateChecklist(checklist.id, { title: titleRef.current });
+      if ((hasTitleChanges.current || reminderDateRef.current || locationDataRef.current) && checklist) {
+        updateChecklist(checklist.id, {
+          title: titleRef.current,
+          reminderDate: reminderDateRef.current?.toISOString(),
+          latitude: locationDataRef.current?.latitude,
+          longitude: locationDataRef.current?.longitude,
+          folderId: folderIdRef.current ?? undefined,
+        });
       }
     });
     return unsubscribe;
@@ -241,6 +272,100 @@ export default function ChecklistDetailScreen() {
             </Text>
           </View>
         }
+        ListFooterComponent={
+          <View style={styles.reminderLocationFooter}>
+            {/* Reminder */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>{t(locale, 'nuevaNota.reminder')}</Text>
+              <View style={styles.reminderRow}>
+                {[
+                  { label: '1h', getDate: () => new Date(Date.now() + 3600000) },
+                  { label: '3h', getDate: () => new Date(Date.now() + 10800000) },
+                  { label: t(locale, 'nuevaNota.tomorrow'), getDate: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
+                  { label: t(locale, 'nuevaNota.nextWeek'), getDate: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(9, 0, 0, 0); return d; } },
+                ].map((opt) => {
+                  const optDate = opt.getDate();
+                  const isActive = reminderDate && Math.abs(reminderDate.getTime() - optDate.getTime()) < 60000;
+                  return (
+                    <TouchableOpacity
+                      key={opt.label}
+                      onPress={() => {
+                        if (isActive) {
+                          setReminderDate(null);
+                        } else {
+                          setReminderDate(optDate);
+                          scheduleReminder(title || checklist.title, optDate);
+                        }
+                      }}
+                      style={[styles.reminderChip, { backgroundColor: isActive ? colors.primary : colors.surface, borderColor: isActive ? colors.primary : colors.border }]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.reminderChipText, { color: isActive ? '#FFFFFF' : colors.textSecondary }]}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                {reminderDate && (
+                  <>
+                    <Text style={[styles.reminderDateText, { color: colors.primary }]}>
+                      {t(locale, 'nuevaNota.reminderSet')}: {reminderDate.toLocaleDateString(locale === 'es' ? 'es-ES' : 'en-US', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    <TouchableOpacity onPress={() => setReminderDate(null)} style={styles.reminderClear} activeOpacity={0.7}>
+                      <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* Location */}
+            <View style={styles.section}>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (locationData) { setLocationData(null); return; }
+                  setLocating(true);
+                  const loc = await getCurrentLocation();
+                  if (loc) setLocationData(loc);
+                  setLocating(false);
+                }}
+                style={[styles.locationBtn, { backgroundColor: locationData ? colors.primary + '15' : colors.surface, borderColor: locationData ? colors.primary + '30' : colors.border }]}
+                activeOpacity={0.7}
+                disabled={locating}
+              >
+                <Ionicons name={locating ? 'hourglass-outline' : locationData ? 'location' : 'location-outline'} size={18} color={locationData ? colors.primary : colors.textSecondary} />
+                <Text style={[styles.locationBtnText, { color: locationData ? colors.primary : colors.textSecondary }]}>
+                  {locating ? t(locale, 'common.loading') : locationData ? (locationData.name || t(locale, 'nuevaNota.locationSet')) : t(locale, 'nuevaNota.addLocation')}
+                </Text>
+                {locationData && <Ionicons name="close-circle" size={18} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />}
+              </TouchableOpacity>
+            </View>
+
+            {/* Folder */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Carpeta</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => { setFolderId(null); hasTitleChanges.current = true; }}
+                  style={[styles.folderChip, { borderColor: colors.border, backgroundColor: !folderId ? colors.primary + '15' : colors.surface }]}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="folder-open-outline" size={16} color={!folderId ? colors.primary : colors.textTertiary} />
+                  <Text style={[styles.folderChipText, { color: !folderId ? colors.primary : colors.textTertiary }]}>Sin carpeta</Text>
+                </TouchableOpacity>
+                {folders.map((f) => (
+                  <TouchableOpacity
+                    key={f.id}
+                    onPress={() => { setFolderId(f.id); hasTitleChanges.current = true; }}
+                    style={[styles.folderChip, { borderColor: f.color + '40', backgroundColor: folderId === f.id ? f.color + '20' : colors.surface }]}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="folder-outline" size={16} color={f.color} />
+                    <Text style={[styles.folderChipText, { color: folderId === f.id ? f.color : colors.textSecondary }]}>{f.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        }
         renderItem={({ item }) => {
           const p = (item.priority || 'none') as ItemPriority;
           const pColor = PRIORITY_COLORS[p];
@@ -375,7 +500,7 @@ const styles = StyleSheet.create({
   },
   filterSegText: { fontSize: 13, fontWeight: '700' },
 
-  list: { flex: 1, paddingHorizontal: 20 },
+  list: { flex: 1, paddingHorizontal: 24 },
   emptyList: { paddingVertical: 40, alignItems: 'center', gap: 12 },
   emptyText: { fontSize: 14, textAlign: 'center' },
 
@@ -394,7 +519,7 @@ const styles = StyleSheet.create({
   removeItem: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
 
   inputContainer: {
-    paddingHorizontal: 20, paddingVertical: 10, borderTopWidth: 1, gap: 8,
+    paddingHorizontal: 24, paddingVertical: 10, borderTopWidth: 1, gap: 8,
   },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   input: { flex: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15 },
@@ -407,4 +532,22 @@ const styles = StyleSheet.create({
   },
   prioChipText: { fontSize: 11, fontWeight: '700' },
   prioClear: { marginLeft: 'auto' },
+  reminderLocationFooter: { paddingTop: 16, paddingBottom: 8 },
+  section: { marginBottom: 16 },
+  sectionLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
+  reminderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  reminderChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  reminderChipText: { fontSize: 13, fontWeight: '600' },
+  reminderClear: { padding: 4 },
+  reminderDateText: { fontSize: 12, fontWeight: '500' },
+  locationBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
+  },
+  locationBtnText: { fontSize: 14, fontWeight: '500' },
+  folderChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1,
+  },
+  folderChipText: { fontSize: 13, fontWeight: '600' },
 });

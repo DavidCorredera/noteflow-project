@@ -1,5 +1,5 @@
-import { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, RefreshControl } from 'react-native';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, RefreshControl, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Spinner } from '@gluestack-ui/themed';
@@ -13,8 +13,13 @@ import SwipeableRow from '../../components/SwipeableRow';
 import ScreenHeader from '../../components/ScreenHeader';
 import { useLocaleStore } from '../../store/localeStore';
 import { t } from '../../i18n';
+import { useFolderStore } from '../../store/folderStore';
+import FolderBar from '../../components/FolderBar';
+import FolderModal from '../../components/FolderModal';
+import FolderPickerModal from '../../components/FolderPickerModal';
 
 export default function ChecklistsScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const sortBy = useThemeStore((s) => s.sortBy);
@@ -24,11 +29,25 @@ export default function ChecklistsScreen() {
   const archiveNote = useNotesStore((s) => s.archiveNote);
   const restoreNote = useNotesStore((s) => s.restoreNote);
   const fetchNotes = useNotesStore((s) => s.fetchNotes);
+  const moveToFolder = useNotesStore((s) => s.moveToFolder);
   const isLoading = useNotesStore((s) => s.isLoading);
   const error = useNotesStore((s) => s.error);
   const locale = useLocaleStore((s) => s.locale);
   const [showArchived, setShowArchived] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [folderPickerItemId, setFolderPickerItemId] = useState<string | null>(null);
+  const [folderModalVisible, setFolderModalVisible] = useState(false);
+  const folders = useFolderStore((s) => s.foldersByType.checklist);
+  const fetchFolders = useFolderStore((s) => s.fetchFolders);
+
+  useEffect(() => { fetchFolders('checklist'); }, []);
+
+  const folderColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    folders.forEach((f) => { map[f.id] = f.color; });
+    return map;
+  }, [folders]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -51,15 +70,61 @@ export default function ChecklistsScreen() {
   }, [checklists, sortBy]);
 
   const source = showArchived ? archived : active;
-  const isEmpty = source.length === 0;
+
+  const matchSearch = useCallback((n: any, q: string) => {
+    if (n.title?.toLowerCase().includes(q)) return true;
+    if (n.items) {
+      return n.items.some((item: any) => item.text?.toLowerCase().includes(q));
+    }
+    return false;
+  }, []);
+
+  const filteredSource = useMemo(() => {
+    let result = source;
+    if (selectedFolderId) result = result.filter((n: any) => n.folderId === selectedFolderId);
+    if (!searchQuery.trim()) return result;
+    const q = searchQuery.toLowerCase();
+    return result.filter((n) => matchSearch(n, q));
+  }, [source, searchQuery, matchSearch, selectedFolderId]);
+
+  const archivedMatched = useMemo(() => {
+    let result = archived;
+    if (selectedFolderId) result = result.filter((n: any) => n.folderId === selectedFolderId);
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return result.filter((n) => matchSearch(n, q));
+  }, [archived, searchQuery, matchSearch, selectedFolderId]);
+
+  const isEmpty = filteredSource.length === 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScreenHeader title={t(locale, 'tabs.checklists')} colors={colors} />
+      <ScreenHeader title={t(locale, 'tabs.checklists')} colors={colors} icon="checkbox" />
+      <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        <Ionicons name="search" size={18} color={colors.textTertiary} />
+        <TextInput style={[styles.searchInput, { color: colors.text }]} placeholder={t(locale, 'common.search')} placeholderTextColor={colors.textTertiary} value={searchQuery} onChangeText={setSearchQuery} autoCapitalize="none" autoCorrect={false} />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+        )}
+      </View>
+      <FolderBar folders={folders} selectedFolderId={selectedFolderId} onSelectFolder={setSelectedFolderId} onManage={() => setFolderModalVisible(true)} colors={colors} />
+      <FolderModal visible={folderModalVisible} onClose={() => setFolderModalVisible(false)} folders={folders} colors={colors} type="checklist" />
       {showArchived && (
         <TouchableOpacity style={styles.backBar} onPress={() => setShowArchived(false)} activeOpacity={0.7}>
-          <Text style={[styles.backArrow, { color: colors.primary }]}>{'←'}</Text>
-          <Text style={[styles.backText, { color: colors.primary }]}>{t(locale, 'checklistsList.noArchived')}</Text>
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+        </TouchableOpacity>
+      )}
+
+      {!showArchived && archived.length > 0 && (!searchQuery.trim() || archivedMatched.length > 0) && (
+        <TouchableOpacity style={[styles.archivedBar, { backgroundColor: colors.surface, marginHorizontal: 16 }]} onPress={() => setShowArchived(true)} activeOpacity={0.7}>
+          <Ionicons name="archive-outline" size={20} color={colors.primary} />
+          <Text style={[styles.archivedBarText, { color: colors.text }]}>{t(locale, 'checklistsList.archived')}</Text>
+          <View style={[styles.archivedBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.archivedBadgeText}>{archivedMatched.length || archived.length}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
         </TouchableOpacity>
       )}
 
@@ -84,9 +149,9 @@ export default function ChecklistsScreen() {
         </View>
       ) : (
         <FlashList
-          data={source}
+          data={filteredSource}
           renderItem={({ item: checklist }) => (
-            <Animated.View entering={FadeInDown} style={{ marginHorizontal: 20, marginBottom: 10 }}>
+            <Animated.View entering={FadeInDown} style={{ marginBottom: 10 }}>
               <SwipeableRow
                 variant="icons-horizontal"
                 archived={!!checklist.archived}
@@ -94,28 +159,30 @@ export default function ChecklistsScreen() {
                 onRestore={() => restoreNote(checklist.id)}
                 onDelete={() => deleteNote(checklist.id)}
                 onEdit={() => router.push(`/checklists/${checklist.id}` as any)}
+                onFolder={() => setFolderPickerItemId(checklist.id)}
                 colors={colors}
               >
-                <ChecklistCard note={checklist} onPress={() => router.push(`/checklists/${checklist.id}` as any)} colors={colors} mode="full" />
+                <ChecklistCard note={checklist} onPress={() => router.push(`/checklists/${checklist.id}` as any)} colors={colors} mode="full" folderColor={checklist.folderId ? folderColorMap[checklist.folderId] : undefined} />
               </SwipeableRow>
             </Animated.View>
           )}
           keyExtractor={(item) => item.id}
-          ListHeaderComponent={
-            !showArchived && archived.length > 0 ? (
-              <TouchableOpacity style={styles.archivedBar} onPress={() => setShowArchived(true)} activeOpacity={0.7}>
-                <Text style={[styles.archivedBarText, { color: colors.primary }]}>{t(locale, 'checklistsList.noArchived')}</Text>
-                <View style={[styles.archivedBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.archivedBadgeText}>{archived.length}</Text>
-                </View>
-              </TouchableOpacity>
-            ) : null
-          }
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 16 : 100 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 16 : 100 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         />
       )}
+      <FolderPickerModal
+        visible={folderPickerItemId !== null}
+        onClose={() => setFolderPickerItemId(null)}
+        folders={folders}
+        colors={colors}
+        locale={locale}
+        onSelect={(folderId) => {
+          if (folderPickerItemId) moveToFolder(folderPickerItemId, folderId, 'checklist');
+          setFolderPickerItemId(null);
+        }}
+      />
       <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]} onPress={() => router.push('/nueva-nota?type=checklist' as any)} activeOpacity={0.8}>
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
@@ -131,11 +198,11 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
   emptySubtitle: { fontSize: 14, textAlign: 'center', opacity: 0.7 },
   emptyContent: { alignItems: 'center', transform: [{ translateY: -40 }] },
-  backBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 6 },
-  backArrow: { fontSize: 22, fontWeight: '600' },
-  backText: { fontSize: 15, fontWeight: '600' },
-  archivedBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4, gap: 8 },
-  archivedBarText: { fontSize: 14, fontWeight: '600' },
+  searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 20, marginBottom: 12, paddingHorizontal: 12, height: 40, borderRadius: 12, borderWidth: 1, gap: 8 },
+  searchInput: { flex: 1, fontSize: 15, padding: 0 },
+  backBar: { flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(128,128,128,0.15)' },
+  archivedBar: { flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 0, paddingVertical: 14, paddingHorizontal: 16, gap: 10, borderRadius: 12, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
+  archivedBarText: { fontSize: 14, fontWeight: '600', flex: 1 },
   archivedBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   archivedBadgeText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   fab: {
