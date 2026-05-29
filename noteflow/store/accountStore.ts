@@ -58,6 +58,8 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   loaded: false,
 
   loadAccounts: async () => {
+    const state = get();
+    if (state.loaded) return;
     try {
       const raw = await loadFromStorage();
       if (raw) {
@@ -69,22 +71,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
           loaded: true,
         });
       } else {
-        // First launch: save current user if signed in
-        const currentUser = auth.currentUser;
-        if (currentUser?.email) {
-          const profile = await loadProfileOnce(currentUser.uid);
-          const initial: SavedAccount = {
-            email: currentUser.email,
-            password: '',
-            uid: currentUser.uid,
-            name: profile?.name || '',
-            avatarUrl: profile?.avatarUrl || null,
-          };
-          await saveToStorage([initial]);
-          set({ accounts: [initial], activeEmail: currentUser.email, loaded: true });
-        } else {
-          set({ loaded: true });
-        }
+        set({ loaded: true });
       }
     } catch {
       set({ loaded: true });

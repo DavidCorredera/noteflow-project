@@ -54,6 +54,7 @@ export default function RootLayout() {
   const setLoading = useAuthStore((s) => s.setLoading);
   const loadProfile = useAuthStore((s) => s.loadProfile);
   const loadAccounts = useAccountStore((s) => s.loadAccounts);
+  const accountsLoadedRef = useRef(false);
 
   const fetchNotes = useNotesStore((s) => s.fetchNotes);
 
@@ -91,7 +92,8 @@ export default function RootLayout() {
         await loadProfile(user.uid);
       }
       setLoading(false);
-      if (!authInitialized) {
+      if (!accountsLoadedRef.current) {
+        accountsLoadedRef.current = true;
         setInitialized(true);
         loadAccounts();
       }
